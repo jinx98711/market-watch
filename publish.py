@@ -35,8 +35,10 @@ def publish(config, state):
     if not state.get('sha'):
         state['sha'] = api(path + '?ref=feed')['sha']
     try:
+        owner = config['repository'].split('/')[0]
         answer = api(path, dict(message='Update public market snapshot', content=base64.b64encode(payload).decode(),
-                                sha=state['sha'], branch='feed'))
+                                sha=state['sha'], branch='feed',
+                                committer=dict(name=owner,email=owner+'@users.noreply.github.com')))
     except RuntimeError:
         state.pop('sha', None)
         raise

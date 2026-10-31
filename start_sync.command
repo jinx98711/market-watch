@@ -5,4 +5,12 @@ if [ ! -f .local/publisher.json ]; then
   echo "缺少本机同步设置 .local/publisher.json"
   exit 1
 fi
-nohup python3 -B publish.py --watch >> .local/publisher.log 2>&1 < /dev/null &
+python3 -B - <<'PY'
+from pathlib import Path
+import subprocess, sys
+root = Path.cwd()
+with (root/'.local/publisher.log').open('a') as log:
+    subprocess.Popen([sys.executable, '-B', str(root/'publish.py'), '--watch'],
+                     stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                     start_new_session=True)
+PY
