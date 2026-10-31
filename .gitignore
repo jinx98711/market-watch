@@ -1,0 +1,9 @@
+.local/
+.taste-skill/
+output/
+.playwright-cli/
+.playwright/
+__pycache__/
+*.pyc
+.DS_Store
+

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#171719">
+  <meta name="description" content="Gate 与 IC 只读行情观察：三周期方向、量比、动能及入场条件。">
+  <title>Gate × IC 行情观察</title>
+  <link rel="stylesheet" href="./style.css">
+  <link rel="icon" href="./mark.svg" type="image/svg+xml">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="行情观察首页"><img src="./mark.svg" width="28" height="28" alt=""><span>Market Watch</span></a>
+    <span class="readonly">只读观察</span>
+  </header>
+  <main>
+    <div class="title-row"><div><h1>Gate × IC 行情观察</h1><p id="updated">正在读取行情…</p></div><button id="refresh" type="button">刷新</button></div>
+    <section class="overview" aria-labelledby="overview-title">
+      <div><h2 id="overview-title">当前条件满足</h2><p class="lead"><span id="ready-count">—</span><span> 个观察机会</span></p><p id="overview-reason">连接数据源后显示筛选结果。</p></div>
+      <div class="source-health"><p id="gate-health">Gate —</p><p id="ic-health">IC —</p></div>
+    </section>
+    <div id="notice" class="notice" role="status" hidden></div>
+    <section aria-labelledby="list-title" class="market-section">
+      <div class="section-heading"><h2 id="list-title">观察名单</h2><span id="row-count">—</span></div>
+      <div class="filters">
+        <div class="tabs" role="group" aria-label="行情来源"><button type="button" data-source="all" aria-pressed="true">全部</button><button type="button" data-source="Gate" aria-pressed="false">Gate</button><button type="button" data-source="IC" aria-pressed="false">IC</button></div>
+        <label class="ready-filter"><input id="ready-only" type="checkbox">仅看条件满足</label>
+        <label class="search"><span class="sr-only">搜索品种</span><input id="search" type="search" placeholder="搜索 UNI、BTC…" autocomplete="off"></label>
+      </div>
+      <div class="table-heading" aria-hidden="true"><span>来源 / 品种</span><span>价格</span><span>15m / 1h / 4h</span><span>动能 / 100</span><span>机会状态</span></div>
+      <div id="markets" aria-live="polite"><p class="empty">正在读取监控快照…</p></div>
+    </section>
+    <details class="guide"><summary>怎么看量比、动能和机会状态？</summary><div>
+      <p><strong>条件满足 · 请核对</strong>：通过当前脚本筛选，仍需人工核对最新报价、止损和仓位。等待状态不等于可以进场。</p>
+      <p><strong>动能 0–100</strong>：70–100 强，40–69 中，20–39 弱，0–19 中性。多、空表示方向，评分不是胜率；评分不会单独触发入场。</p>
+      <p><strong>Gate 量比</strong>：已收盘 15 分钟成交额相对基准均值的倍数。回踩缩量 ≤0.8 倍、确认放量 ≥1.5 倍，还需要趋势、价格形态和成本等条件。</p>
+      <p><strong>IC Tick 比</strong>：经纪商报价活跃度，不是交易所成交量。结构候选的账户费用仍待核实。</p>
+      <p>电脑约每 30 秒同步一次，手机约每 10 秒读取。同步和网络可能有延迟。行情过期时隐藏价格、评分和入场价位；电脑休眠、断网或脚本停止后无法持续更新。</p>
+      <p>页面只公开市场观察，不展示交易账号、个人仓位或盈亏，也不自动下单。</p>
+    </div></details>
+    <footer><span>Market Watch</span><span>时间均为 UTC+8 · 行情来源分别计算</span></footer>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
