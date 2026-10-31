@@ -1,6 +1,6 @@
-import {view,momentum,filterRows,snapshotURLs,combineDirect} from './model.js?v=gate-direct-1';
-import {GateClient} from './gate-client.js?v=gate-direct-1';
-import {FIELDS,defaults,loadSettings,validateSettings,applyColors,get,set} from './settings.js?v=gate-direct-1';
+import {view,momentum,filterRows,snapshotURLs,combineDirect} from './model.js?v=gate-quotes-2';
+import {GateClient} from './gate-client.js?v=gate-quotes-2';
+import {FIELDS,defaults,loadSettings,validateSettings,applyColors,get,set} from './settings.js?v=gate-quotes-2';
 const $=id=>document.getElementById(id),esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let gate=null,ic=null,snapshot=null,source='all',dataURL='',loadingIC=false,lastMask='',error='',progress='',opened=new Set(),settings=null,base=null,client=null,generation=0,loadingGate=false;
 const time=t=>t?new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Kuala_Lumpur',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(t*1000)):'—';
@@ -21,7 +21,7 @@ function render(){
     const periods=r.periods.map((p,index)=>`<span class="${tone(p)}"><span class="frame-label">${['15m','1h','4h'][index]}</span>${esc(p)}</span>`).join(' <span class="desktop-separator"> / </span> ');
     return `<details class="market-row ${r.state} ${r.live?'':'stale'}" data-key="${esc(key)}" ${opened.has(key)?'open':''}>
       <summary class="row-main"><span class="identity"><strong>${esc(r.symbol)}</strong><span>${esc(r.source)} · ${r.source==='IC'?'CFD 报价':'USDT 永续'}</span></span>
-      <span class="price">${esc(r.price)}</span><span class="periods">${periods}</span>
+      <span class="price">${r.source==='Gate'?`<span class="last-price"><span class="quote-label">Last</span>${esc(r.price)}</span><span class="book-price"><span class="quote-label">Bid</span>${esc(r.bid)}</span><span class="book-price"><span class="quote-label">Ask</span>${esc(r.ask)}</span>`:esc(r.price)}</span><span class="periods">${periods}</span>
       <span class="momentum ${m.tone||'neutral'}"><span class="momentum-heading"><strong>${esc(m.directionText||'等待')}</strong><b>${esc(m.score??'—')}<small>/100</small></b></span><span class="strength">${esc(m.levelLabel||'无评分')}</span><small>${r.source==='Gate'?'量比':'Tick 比'} ${esc(ratio)}</small></span>
       <span class="opportunity ${r.direction>0?'rise':r.direction<0?'fall':''}">${r.direction?`<b>${r.direction>0?'↑ 做多':'↓ 做空'}</b>`:''}${esc(stateLabel(r))}<small>展开详情</small></span></summary>
       <div class="row-detail"><p>${esc(r.reason)}</p>${r.live&&r.direction?`<div class="levels"><div><span>入场观察</span><strong>${esc(r.entry)}</strong></div><div><span>止损参考</span><strong>${esc(r.stop)}</strong></div><div><span>止盈参考</span><strong>${esc(r.take)}</strong></div></div>`:''}
@@ -92,7 +92,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){client?.ca
 setInterval(refreshGate,60000);setInterval(refreshIC,10000);setInterval(clock,1000);
 async function start(){
   render();refreshIC();
-  try{const r=await fetch('./gate-config.json?v=gate-direct-1');if(!r.ok)throw Error('规则文件不可用');const config=await r.json();base=defaults(config);settings=loadSettings(config);applyColors(settings.display);configureGate();}
+  try{const r=await fetch('./gate-config.json?v=gate-quotes-2');if(!r.ok)throw Error('规则文件不可用');const config=await r.json();base=defaults(config);settings=loadSettings(config);applyColors(settings.display);configureGate();}
   catch(e){error=`无法加载 Gate 筛选规则：${e.message}`;render();}
 }
 start();

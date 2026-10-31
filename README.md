@@ -1,6 +1,6 @@
 # Gate × IC 手机行情观察
 
-个人只读行情看板，部署到 GitHub Pages。分别显示 Gate / IC 价格、15m/1h/4h 方向、动能评分、量比/Tick 比、机会状态及有效的观察区间。
+个人只读行情看板，部署到 GitHub Pages。分别显示 Gate 的 Last、Bid、Ask 与 IC 价格、15m/1h/4h 方向、动能评分、量比/Tick 比、机会状态及有效的观察区间。
 
 ## 免费 Gate 直连
 

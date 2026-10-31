@@ -79,7 +79,20 @@
 
  ROOT = Path(__file__).resolve().parent
  RUNTIME = ROOT / 'runtime' / 'combined'
-@@ -249,7 +250,8 @@
+@@ -86,8 +87,12 @@
+     for item in incoming:
+         row = blank('Gate', item['contract'], str(snapshot.get('error') or item.get('reason') or '等待完整行情'), timestamp)
+         plan = item.get('plan')
++        row.update(bid='—', ask='—')
+         if ok:
+             row['price'] = fmt(item.get('last'), 8)
++            bid, ask = item.get('bid'), item.get('ask')
++            if all(type(value) in (int, float) and math.isfinite(value) for value in (bid, ask)) and 0 < bid <= ask:
++                row.update(bid=fmt(bid, 8), ask=fmt(ask, 8))
+             row['valid_until'] = timestamp + 150
+             complete = isinstance(item.get('periods'), dict) and all(item['periods'].get(f) in ('long','short','wait') for f in FRAMES)
+             if complete:
+@@ -249,10 +254,11 @@
      lines = [['H', 1, snapshot['generation'], int(snapshot['generated_at']),
                int(snapshot['gate']['updated']), snapshot['gate']['state'],
                int(snapshot['mt5']['updated']), snapshot['mt5']['state'], '；'.join(note.split(' | ',1)[0] for note in snapshot['positions']),
@@ -88,8 +101,23 @@
 +              snapshot.get('display', {}).get('rise', '#ff6b78'), snapshot.get('display', {}).get('fall', '#4ed69a')]]
      for r in snapshot['rows']:
          lines.append(['R', r['source'], r['symbol'], r['price'], *r['periods'], r['direction'],
-                       r['entry'], r['stop'], r['take'], int(r['updated']), int(r['valid_until']), r['reason'], r.get('opportunity', '')])
-@@ -292,7 +294,10 @@
+-                      r['entry'], r['stop'], r['take'], int(r['updated']), int(r['valid_until']), r['reason'], r.get('opportunity', '')])
++                      r['entry'], r['stop'], r['take'], int(r['updated']), int(r['valid_until']), (quote_text(r)+'；' if r['source']=='Gate' else '')+r['reason'], r.get('opportunity', '')])
+     return '\n'.join('\t'.join(map(clean, line)) for line in lines) + '\n'
+
+
+@@ -263,6 +269,10 @@
+     g = f"G{gate.get('evaluated',0)}筛选 确认{gate.get('ready',0)}/等{gate.get('watch',0)}" if gate else 'Gate筛选暂停'
+     i = f"IC{ic.get('evaluated',0)}筛选 结构{ic.get('structure',0)}" if ic else 'IC筛选暂停'
+     return g+' | '+i
++
++
++def quote_text(row):
++    return f"Bid {row.get('bid', '—')} / Ask {row.get('ask', '—')}"
+
+
+ def row_label(row):
+@@ -292,7 +302,10 @@
      width = max(40, size.columns - 1)
      rows = [r for r in snapshot['rows'] if source == 'all' or r['source'] == source]
      rows.sort(key=lambda r: not bool(r['direction']))
@@ -101,7 +129,7 @@
      pad = lambda text, width: text + ' ' * max(0, width - cells(text))
      def health(key, name):
          state = snapshot[key]
-@@ -310,7 +315,8 @@
+@@ -310,7 +323,8 @@
          summary = name + '：' + (('↑多 ' + '、'.join(longs) + '  ' if longs else '') + ('↓空 ' + '、'.join(shorts) if shorts else '') if longs or shorts else '等待，暂无有效观察')
          heading.extend(paint(line, 1 if longs and not shorts else -1 if shorts and not longs else 0) for line in wrapped(summary, width))
      heading.extend(wrapped(screening_text(snapshot), width))
@@ -111,7 +139,26 @@
      notes = []
      for position in snapshot['positions']:
          notes.extend(wrapped(position.split(' | ',1)[0], width))
-@@ -350,13 +356,15 @@
+@@ -318,11 +332,13 @@
+         notes.extend(wrapped(detail, width))
+     def levels(row):
+         return wrapped(f"    入场观察 {row['entry']}    止损参考 {row['stop']}    止盈参考 {row['take']}", width) if row['direction'] else []
++    def quotes(row):
++        return wrapped('    '+quote_text(row), width) if row['source']=='Gate' else []
+     # Paginate whole observation blocks so their prices always stay together.
+     capacity = max(1, size.lines - len(heading) - len(notes) - 5) if tty else float('inf')
+     chunks, used = [[]], 0
+     for row in rows:
+-        cost = 1 + len(levels(row))
++        cost = 1 + len(quotes(row)) + len(levels(row))
+         if chunks[-1] and used + cost > capacity:
+             chunks.append([])
+             used = 0
+@@ -347,16 +363,19 @@
+         if tty:
+             values[2] = '\033[1m' + values[2] + '\033[0m'
+         lines.append('  ' + ' '.join(values))
++        lines.extend(quotes(r))
          lines.extend(paint(line, r['direction']) for line in levels(r))
      lines += ['─' * min(width, 103)]
      lines += notes
@@ -128,15 +175,29 @@
      logging.getLogger().addHandler(logging.NullHandler())
      class Monitor(g.Monitor):
          def analyse(self, symbol, ticker, now):
-@@ -387,6 +395,7 @@
+@@ -385,8 +404,12 @@
+             return row
+         def cycle(self):
              snapshot = opportunities.gate_shortlist(super().cycle(), self.last_tickers, self.cfg)
++            for row in snapshot['rows']:
++                ticker = self.last_tickers.get(row['contract']) or {}
++                row.update(bid=g.number(ticker.get('highest_bid'), 0), ask=g.number(ticker.get('lowest_ask'), 0))
              self.symbols = [row['contract'] for row in snapshot['rows']]
              self.extras = snapshot['extras']
 +            snapshot['rules'] = dict(filters=self.cfg['filters'], strategy=self.cfg['strategy'])
              return snapshot
      class UniLossNotifier(g.Notifier):
          def emit(self, key, *args, **kwargs):
-@@ -503,6 +512,15 @@
+@@ -424,6 +447,8 @@
+             if row['source'] == source and (not live or 0 < row['valid_until'] < now):
+                 row.update(price='—', direction=0, periods=['等待']*3, entry='—', stop='—', take='—',
+                            reason='来源或观察数据过期/停止；暂停观察', opportunity='等待')
++                if row['source']=='Gate':
++                    row.update(bid='—', ask='—')
+                 row.pop('volume', None)
+                 row.pop('activity', None)
+                 row.pop('momentum', None)
+@@ -503,6 +528,15 @@
                  return
              if select.select([sys.stdin], [], [], 2)[0]:
                  key = sys.stdin.read(1)
@@ -152,7 +213,7 @@
                  if key in ('q','Q'):
                      return
                  if key in ('n','N',' ',']'):
-@@ -604,7 +622,15 @@
+@@ -604,7 +638,15 @@
                  previous_payload = payload
              except (OSError, ValueError):
                  payload = dict(previous_payload, connected=False)
@@ -252,3 +313,44 @@
        if(visible!="[") visible+=",";
        visible+="{\"source\":"+J(f[1])+",\"symbol\":"+J(f[2])+",\"price\":"+J(price)+",\"direction\":"+I(direction)+"}";
        drawn++;
+--- a/mt5/test_combined_watch.py
++++ b/mt5/test_combined_watch.py
+@@ -18,6 +18,30 @@
+
+     def result(self, gate=None, mt5=None, now=NOW):
+         return c.combine(self.gate if gate is None else gate, self.mt5 if mt5 is None else mt5, m, self.cfg, m.EXPECTED_SERVER, now)
++
++    def test_gate_bid_ask_reach_terminal_and_panel_without_affecting_ic(self):
++        self.gate['rows'][0].update(bid=89999.5, ask=90000.5)
++        result=self.result();gate,ic=result['rows']
++        self.assertEqual((gate['price'],gate['bid'],gate['ask']),('90000','89999.5','90000.5'))
++        self.assertEqual(ic['price'],'120/120.02')
++        self.assertNotIn('bid',ic)
++        text,_=c.render(result)
++        self.assertIn('Bid 89999.5 / Ask 90000.5',text)
++        self.assertIn('Bid 89999.5 / Ask 90000.5',c.fields(result))
++        self.assertTrue(all(c.cells(line)<=119 for line in text.splitlines() if line.startswith('  ')))
++
++    def test_invalid_and_expired_gate_books_are_hidden(self):
++        for bid,ask in [(90001,90000),(0,90000),(True,90000),(float('nan'),90000),(None,None)]:
++            self.gate['rows'][0].update(bid=bid,ask=ask)
++            row=self.result()['rows'][0]
++            self.assertEqual((row['bid'],row['ask']),('—','—'))
++        self.gate['rows'][0].update(bid=89999.5,ask=90000.5)
++        result=self.result()
++        expired=c.guarded_view(result,NOW+301)['rows'][0]
++        self.assertEqual((expired['price'],expired['bid'],expired['ask']),('—','—','—'))
++        self.gate['market_time']=NOW-151
++        row=self.result()['rows'][0]
++        self.assertEqual((row['bid'],row['ask']),('—','—'))
+
+     def test_same_asset_is_two_independent_prices(self):
+         rows = self.result()['rows']
+@@ -280,6 +304,7 @@
+         for enabled in (True, False):
+             with self.subTest(enabled=enabled), tempfile.TemporaryDirectory() as tmp:
+                 with mock.patch.object(c, 'RUNTIME', Path(tmp)), \
++                     mock.patch.object(c.preferences, 'PATH', Path(tmp) / 'settings.json'), \
+                      mock.patch.object(c, 'module', return_value=g), \
+                      mock.patch.object(c.signal, 'signal'), \
+                      mock.patch.object(g, 'load_config', return_value=dict(notifications=enabled, pinned=[])), \

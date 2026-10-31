@@ -1,4 +1,4 @@
-import {FRAMES,num,quality,parseCandles,closedCandles,analyse,selectRows,displayRow} from './gate-engine.js?v=gate-direct-1';
+import {FRAMES,num,quality,parseCandles,closedCandles,analyse,selectRows,displayRow} from './gate-engine.js?v=gate-quotes-2';
 const BASES=['https://api.gateio.ws/api/v4','https://fx-api.gateio.ws/api/v4'];
 const ALLOWED=new Set(['/spot/time','/futures/usdt/tickers','/futures/usdt/contracts','/futures/usdt/candlesticks']);
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,Math.max(0,ms)));
@@ -88,7 +88,7 @@ export class GateClient{
       return analyse(symbol,data.frames,data.raw15,this.contracts.get(symbol),ticker,this.config,analysisTime,now,this.invalid);
     });
     const selected=selectRows(analysed,this.config);
-    return {generated_at:now,source:{state:'正常',updated:now,generated_at:now},rows:selected.map(r=>displayRow(r,now)),
+    return {generated_at:now,source:{state:'正常',updated:now,generated_at:now},rows:selected.map(r=>displayRow(r,now,tickers.get(r.contract))),
       screening:{evaluated:symbols.length,ready:analysed.filter(r=>r.state==='ready').length,watch:analysed.filter(r=>r.state==='watch').length,structure:0}};
   }
 }

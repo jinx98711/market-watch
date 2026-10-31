@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {analyse,buildPlan,volumeSignal,ema,atr,parseCandles,closedCandles,rounded,quality,selectRows,evaluate} from '../dist/gate-engine.js';
+import {analyse,buildPlan,volumeSignal,ema,atr,parseCandles,closedCandles,rounded,quality,selectRows,evaluate,displayRow} from '../dist/gate-engine.js';
 import {GateClient} from '../dist/gate-client.js';
 import {combineDirect,view,momentum} from '../dist/model.js';
 import {defaults,validateSettings,loadSettings} from '../dist/settings.js';
@@ -64,4 +64,24 @@ test('hourly history is cached only inside the same closed-bar interval',async()
  const c=new GateClient(cfg),bars=base.frames['1h'];c.serverAt=data.analysisTime;c.clockAt=performance.now();c.cache.set('BTC_USDT:1h',{raw:bars,fetched:data.analysisTime});let calls=0;c.request=async()=>{calls++;return bars.slice(-3).map(b=>({...b,sum:b.v}));};
  await c.candles('BTC_USDT','1h',data.analysisTime);assert.equal(calls,0);
  await assert.rejects(c.candles('BTC_USDT','1h',data.analysisTime+3600));assert.equal(calls,1);
+});
+test('Gate quotes use the final verified ticker for every selected state',async()=>{
+ const c=new GateClient({...cfg,pinned:['BTC_USDT'],extra_candidates:[]});let quotes=0;
+ c.syncClock=async()=>{c.serverAt=data.analysisTime;c.clockAt=performance.now();};
+ c.metadata=async()=>{c.contracts=new Map([['BTC_USDT',base.meta]]);};
+ c.candles=async(_symbol,frame)=>({closed:base.frames[frame],raw:base.frames[frame]});
+ c.request=async path=>{assert.equal(path,'/futures/usdt/tickers');quotes++;return [{...base.ticker,highest_bid:quotes===1?'100.49':'100.48',lowest_ask:quotes===1?'100.51':'100.52'}];};
+ const result=await c.scan();assert.equal(quotes,2);assert.equal(result.rows[0].bid,'100.48');assert.equal(result.rows[0].ask,'100.52');assert.equal(result.rows[0].price,'100.5');
+ c.metadata=async()=>{c.contracts=new Map();};
+ const blocked=await c.scan();assert.equal(blocked.rows[0].state,'wait');assert.equal(blocked.rows[0].bid,'100.48');assert.equal(blocked.rows[0].ask,'100.52');
+});
+test('Gate missing, crossed and nonnumeric books show dashes; expiry hides all quotes',()=>{
+ const row={contract:'BTC_USDT',last:100.5,state:'wait'};
+ for(const ticker of [null,{}, {highest_bid:101,lowest_ask:100},{highest_bid:true,lowest_ask:101},{highest_bid:100,lowest_ask:'NaN'}]){
+  const displayed=displayRow(row,1000,ticker);assert.equal(displayed.bid,'—');assert.equal(displayed.ask,'—');
+ }
+ const good=displayRow(row,1000,{highest_bid:'100.4',lowest_ask:'100.6'}),source={state:'正常',updated:1000};
+ const combined=combineDirect({generated_at:1000,source,rows:[good]},null);
+ assert.equal(view(combined,1001).rows.find(r=>r.source==='Gate').bid,'100.4');
+ const expired=view(combined,1151).rows.find(r=>r.source==='Gate');for(const key of ['price','bid','ask'])assert.equal(expired[key],'—');
 });

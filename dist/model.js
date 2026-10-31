@@ -1,4 +1,4 @@
-import {DEFAULT_DISPLAY} from './settings.js?v=gate-direct-1';
+import {DEFAULT_DISPLAY} from './settings.js?v=gate-quotes-2';
 export function fresh(now, timestamp, ttl) {return Number.isFinite(timestamp) && timestamp>0 && now-timestamp>=-5 && now-timestamp<=ttl;}
 export function momentum(signed,grades=DEFAULT_DISPLAY.grades) {
   if(!Number.isFinite(signed)||Math.abs(signed)>100)return {label:'—',strength:'',score:null};
@@ -15,7 +15,7 @@ export function view(snapshot, now=Date.now()/1000) {
   const rows=snapshot.rows.map(row=>{
     const live=!!sources[row.source]?.live&&row.valid_until>0&&now<=row.valid_until;
     const state=live?row.state:'wait';
-    return {...row,live,state,price:live?row.price:'—',periods:live?row.periods:['等待','等待','等待'],
+    return {...row,live,state,price:live?row.price:'—',bid:live?row.bid||'—':'—',ask:live?row.ask||'—':'—',periods:live?row.periods:['等待','等待','等待'],
       momentum:live?row.momentum:null,ratio:live?row.ratio:null,entry:live?row.entry:'—',stop:live?row.stop:'—',take:live?row.take:'—',
       reason:live||sources[row.source]?.live&&row.valid_until===0?row.reason:independent&&row.source==='Gate'?'Gate 行情或计划已过期，等待直连更新':'行情或同步已过期，暂停观察；等待电脑恢复更新'};
   });

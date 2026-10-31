@@ -145,9 +145,10 @@ export function selectRows(rows,cfg){
     .sort((a,b)=>Number(a.state!=='ready')-Number(b.state!=='ready')||a.entry_distance_atr-b.entry_distance_atr||b.net_rr-a.net_rr||a.contract.localeCompare(b.contract)).slice(0,cfg.extra_count);
   const selected=new Set([...cfg.pinned,...extra.map(r=>r.contract)]);return rows.filter(r=>selected.has(r.contract));
 }
-export function displayRow(row,updated){
+export function displayRow(row,updated,ticker){
   const active=['ready','watch'].includes(row.state)&&row.plan&&row.plan.expires_at>updated,fmt=value=>Number.isFinite(value)?String(value):'—';
-  return {source:'Gate',symbol:row.contract,price:fmt(row.last),periods:['15m','1h','4h'].map(frame=>({long:'↑多',short:'↓空',wait:'盘整'}[row.periods?.[frame]]||'等待')),
+  const bid=num(ticker?.highest_bid,0),ask=num(ticker?.lowest_ask,0),bookValid=bid>0&&ask>=bid;
+  return {source:'Gate',symbol:row.contract,price:fmt(row.last),bid:bookValid?fmt(bid):'—',ask:bookValid?fmt(ask):'—',periods:['15m','1h','4h'].map(frame=>({long:'↑多',short:'↓空',wait:'盘整'}[row.periods?.[frame]]||'等待')),
     direction:active?(row.plan.side==='long'?1:-1):0,state:active?row.state:'wait',momentum:row.momentum??null,ratio:row.volume?.latest_ratio??null,
     entry:active?`${fmt(row.plan.entry_low)}~${fmt(row.plan.entry_high)}`:'—',stop:active?fmt(row.plan.stop):'—',take:active?`${fmt(row.plan.tp1)}/${fmt(row.plan.tp2)}`:'—',reason:row.reason,
     updated,valid_until:active?Math.min(updated+150,row.plan.expires_at):updated+150};
