@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {view,momentum,filterRows} from '../dist/model.js';
+import {view,momentum,filterRows,snapshotURLs} from '../dist/model.js';
 const fixture=()=>({schema:1,generated_at:1000,sources:{Gate:{state:'正常',updated:999},IC:{state:'正常',updated:999}},rows:[
   {source:'Gate',symbol:'UNI_USDT',price:'6.8',periods:['↑多','↑多','↑多'],state:'ready',direction:1,momentum:70,ratio:1.5,entry:'6.7~6.8',stop:'6.6',take:'7.0',updated:999,valid_until:1100},
   {source:'IC',symbol:'UNIUSD',price:'6.7/6.8',periods:['↑多','↑多','↑多'],state:'structure',direction:1,momentum:69,ratio:.9,entry:'6.7',stop:'6.6',take:'7',updated:999,valid_until:1040}
@@ -16,3 +16,8 @@ test('momentum threshold boundaries and zero are explicit',()=>{for(const [score
 test('filters follow source, query and ready state',()=>{const r=view(fixture(),1001).rows;assert.equal(filterRows(r,'IC','uni',false).length,1);assert.equal(filterRows(r,'IC','uni',true).length,0);assert.equal(filterRows(r,'all','BTC',false).length,0);});
 test('stopped individual quote retains its explanation',()=>{const x=fixture();x.rows[1].valid_until=0;x.rows[1].reason='报价停止更新，可能休市';assert.match(view(x,1001).rows[1].reason,/休市/);});
 test('invalid schema has no ready opportunity',()=>assert.equal(view({schema:9,rows:[]},1001).ready,0));
+test('immutable file lookup waits six seconds for publication and has one fallback',()=>{
+  assert.deepEqual(snapshotURLs('https://example.com/snapshots/',1005),['https://example.com/snapshots/49.json','https://example.com/snapshots/48.json']);
+  assert.equal(snapshotURLs('https://example.com/snapshots/',1006)[0],'https://example.com/snapshots/50.json');
+  assert.equal(snapshotURLs('https://example.com/snapshots/',1026)[0],'https://example.com/snapshots/51.json');
+});

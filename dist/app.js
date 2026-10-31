@@ -1,4 +1,4 @@
-import {view,momentum,filterRows} from './model.js';
+import {view,momentum,filterRows,snapshotURLs} from './model.js';
 const $=id=>document.getElementById(id),esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let snapshot=null,source='all',dataURL='',loading=false,lastMask='',error='',opened=new Set();
 const time=t=>t?new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Kuala_Lumpur',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(t*1000)):'—';
@@ -42,10 +42,13 @@ async function refresh(){
   if(loading)return;loading=true;$('refresh').disabled=true;$('refresh').textContent='读取中';
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
   try{
-    if(!dataURL){const response=await fetch('./config.json',{cache:'no-store',signal:controller.signal});if(!response.ok)throw Error();dataURL=(await response.json()).data_url;}
-    const url=new URL(dataURL,location.href);url.searchParams.set('t',Math.floor(Date.now()/10000));
-    const response=await fetch(url,{cache:'no-store',signal:controller.signal});if(!response.ok)throw Error();
-    const data=await response.json();if(data.schema!==1||!Array.isArray(data.rows))throw Error();
+    if(!dataURL){const response=await fetch('./config.json',{cache:'no-store',signal:controller.signal});if(!response.ok)throw Error();dataURL=(await response.json()).data_base;}
+    let data=null;
+    for(const url of snapshotURLs(dataURL)){
+      const response=await fetch(url,{signal:controller.signal});
+      if(response.ok){data=await response.json();break;}
+    }
+    if(data?.schema!==1||!Array.isArray(data.rows))throw Error();
     snapshot=data;error='';
   }catch{error=snapshot?'行情同步暂时不可用；保留最近快照，过期后自动暂停。':'无法连接行情快照，请稍后刷新。';}
   finally{clearTimeout(timeout);loading=false;$('refresh').disabled=false;$('refresh').textContent='刷新';render();}
@@ -54,4 +57,4 @@ document.querySelectorAll('[data-source]').forEach(button=>button.addEventListen
 $('refresh').addEventListener('click',refresh);$('search').addEventListener('input',render);$('ready-only').addEventListener('change',render);
 $('markets').addEventListener('toggle',event=>{const key=event.target.dataset.key;if(key){if(event.target.open)opened.add(key);else opened.delete(key);}},true);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
-setInterval(()=>{if(!document.hidden)refresh();},10000);setInterval(clock,1000);refresh();
+setInterval(()=>{if(!document.hidden)refresh();},5000);setInterval(clock,1000);refresh();

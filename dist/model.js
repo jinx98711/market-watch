@@ -25,3 +25,7 @@ export function filterRows(rows,source,search,readyOnly){
   return rows.filter(r=>(source==='all'||r.source===source)&&r.symbol.includes(q)&&(!readyOnly||r.state==='ready'))
     .sort((a,b)=>Number(b.state==='ready')-Number(a.state==='ready'));
 }
+export function snapshotURLs(base,now=Date.now()/1000){
+  const bucket=Math.floor((now-6)/20);
+  return [bucket,bucket-1].map(value=>new URL(`${value}.json`,base).href);
+}
