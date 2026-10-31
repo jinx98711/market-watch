@@ -1,0 +1,254 @@
+--- a/gate/gate_watch.py
++++ b/gate/gate_watch.py
+@@ -443,8 +443,9 @@
+     return result
+
+
+-def volume_signal(candles: List[Candle], side: str, averages: List[float], a: float) -> dict:
++def volume_signal(candles: List[Candle], side: str, averages: List[float], a: float, rules: Optional[dict] = None) -> dict:
+     """Compare closed USDT turnover; exclude the entire four-bar setup from its baseline."""
++    rules = rules or {}
+     baseline = statistics.mean(c.v for c in candles[-24:-4])
+     result = dict(basis="quote_turnover_usdt", latest_ratio=None, pullback_ratio=None,
+                   confirmed=False, blocked=False, status="量能数据不足")
+@@ -462,17 +463,17 @@
+     if pullbacks:
+         result["pullback_ratio"] = statistics.mean(c.v for c in pullbacks) / baseline
+     # One high-volume adverse candle must not be hidden by averaging quiet bars.
+-    adverse_spike = any(sign * (c.c-c.o) < 0 and c.v >= 1.5*baseline for c in candles[-4:])
++    adverse_spike = any(sign * (c.c-c.o) < 0 and c.v >= rules.get("adverse_volume_ratio", 1.5)*baseline for c in candles[-4:])
+     span = last.h - last.l
+     close_strength = ((last.c-last.l) if side == "long" else (last.h-last.c)) / span if span > 0 else 0
+-    exhaustion = ratio >= 2 and (span <= 0 or abs(last.c-last.o) <= 0.25*span or close_strength < 0.6)
++    exhaustion = ratio >= rules.get("exhaustion_volume_ratio", 2) and (span <= 0 or abs(last.c-last.o) <= 0.25*span or close_strength < 0.6)
+     if adverse_spike or exhaustion:
+         result.update(blocked=True, status="放量逆向，暂停" if adverse_spike else "放量滞涨/滞跌，暂停")
+     elif not pullbacks:
+         result["status"] = "等待回踩/反弹"
+-    elif result["pullback_ratio"] > 0.8:
++    elif result["pullback_ratio"] > rules.get("pullback_volume_ratio", 0.8):
+         result["status"] = "回踩/反弹未缩量"
+-    elif ratio < 1.5:
++    elif ratio < rules.get("confirmation_volume_ratio", 1.5):
+         result["status"] = "确认K线未放量"
+     else:
+         result.update(confirmed=True, status="缩量回踩/反弹·放量达标")
+@@ -487,7 +488,7 @@
+     side = directions[0] if directions[0] == directions[1] else "wait"
+     a = atr(m15)
+     ma = ema([c.c for c in m15], 20)
+-    output["volume"] = volume_signal(m15, side, ma, a)
++    output["volume"] = volume_signal(m15, side, ma, a, cfg["strategy"])
+     if side == "wait":
+         return output
+     if output["volume"]["blocked"]:
+@@ -698,7 +699,7 @@
+ def state_label(row: dict) -> str:
+     state, side = row.get("state"), row.get("side")
+     if state == "ready":
+-        return "🟢⬆️ 做多观察条件满足" if side == "long" else "🔴⬇️ 做空观察条件满足"
++        return "🔴⬆️ 做多观察条件满足" if side == "long" else "🟢⬇️ 做空观察条件满足"
+     if state == "watch":
+         if row.get("plan") and row["plan"]["confirmed"]:
+             return "🟡 等回踩，不追多" if side == "long" else "🟡 等反弹，不追空"
+@@ -713,7 +714,7 @@
+ *{box-sizing:border-box}body{margin:0;background:var(--bg);color:#eef2f8;font:15px -apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif}
+ main{max-width:1280px;margin:auto;padding:32px 24px}h1{font-size:27px;letter-spacing:-.5px;margin:0 0 8px}h2{font-size:18px;margin:30px 0 14px}p{line-height:1.7}.muted{color:var(--muted)}
+ .bar{overflow-wrap:anywhere;padding:14px 18px;border:1px solid var(--line);background:var(--panel);border-radius:12px;margin:18px 0}.warning{border-color:#82672a;color:#ffe1a0}.bad{border-color:#c75669;background:#321c28;color:#ffbac6}
+-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:16px}.card{border:1px solid var(--line);border-radius:14px;padding:20px;background:var(--panel)}.card.ready.long{border-color:#58cb9e}.card.ready.short{border-color:#f18092}
++.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:16px}.card{border:1px solid var(--line);border-radius:14px;padding:20px;background:var(--panel)}.card.ready.long{border-color:#f18092}.card.ready.short{border-color:#58cb9e}
+ .coin{font-size:21px;font-weight:700}.status{font-size:15px;margin:12px 0}.last{font-size:28px;font-weight:600;font-variant-numeric:tabular-nums;margin:6px 0}.rows{margin-top:15px;border-top:1px solid var(--line);padding-top:8px}.row{display:flex;justify-content:space-between;gap:10px;margin:9px 0}.row span:first-child{color:var(--muted)}.small{font-size:12px;line-height:1.7}.reason{min-height:42px;line-height:1.55;color:#c6d0df}.foot{margin-top:24px;font-size:13px;color:var(--muted)}.obsolete .levels,.invalid .levels,.expired .levels,.error .levels{opacity:.35;text-decoration:line-through}a{color:#8ab8ff}
+ """
+
+@@ -947,7 +948,7 @@
+                 if actual >= p["expires_at"] or time.monotonic() - received_mono > 90:
+                     row.update(state="expired", reason="报价或计划已过期，未发送提醒")
+                     continue
+-                side = "🟢⬆️ 做多" if p["side"] == "long" else "🔴⬇️ 做空"
++                side = "🔴⬆️ 做多" if p["side"] == "long" else "🟢⬇️ 做空"
+                 title = row["contract"].replace("_USDT", "") + "｜" + side + "观察条件满足"
+                 body = "观察 {}～{}；止损 {}；目标 {}/{}。{}到期。请人工核对，不追价。".format(
+                     price(p["entry_low"], tick), price(p["entry_high"], tick), price(p["stop"], tick),
+--- a/mt5/combined_watch.py
++++ b/mt5/combined_watch.py
+@@ -20,6 +20,7 @@
+ import unicodedata
+ import opportunities
+ import momentum
++import monitor_settings as preferences
+
+ ROOT = Path(__file__).resolve().parent
+ RUNTIME = ROOT / 'runtime' / 'combined'
+@@ -249,7 +250,8 @@
+     lines = [['H', 1, snapshot['generation'], int(snapshot['generated_at']),
+               int(snapshot['gate']['updated']), snapshot['gate']['state'],
+               int(snapshot['mt5']['updated']), snapshot['mt5']['state'], '；'.join(note.split(' | ',1)[0] for note in snapshot['positions']),
+-              int(snapshot.get('positions_until', 0)), '；'.join(snapshot.get('position_details', [])), screening_text(snapshot)]]
++              int(snapshot.get('positions_until', 0)), '；'.join(snapshot.get('position_details', [])), screening_text(snapshot),
++              snapshot.get('display', {}).get('rise', '#ff6b78'), snapshot.get('display', {}).get('fall', '#4ed69a')]]
+     for r in snapshot['rows']:
+         lines.append(['R', r['source'], r['symbol'], r['price'], *r['periods'], r['direction'],
+                       r['entry'], r['stop'], r['take'], int(r['updated']), int(r['valid_until']), r['reason'], r.get('opportunity', '')])
+@@ -292,7 +294,10 @@
+     width = max(40, size.columns - 1)
+     rows = [r for r in snapshot['rows'] if source == 'all' or r['source'] == source]
+     rows.sort(key=lambda r: not bool(r['direction']))
+-    paint = lambda text, direction: (f'\033[{ {1:32, -1:31, 0:33}[direction]}m{text}\033[0m' if tty else text)
++    display = preferences.load()['display']
++    preferences.project(snapshot, {'display': display})
++    codes = {1:preferences.ansi(display['rise']), -1:preferences.ansi(display['fall']), 0:'33'}
++    paint = lambda text, direction: (f'\033[1;{codes[direction]}m{text}\033[0m' if tty else text)
+     pad = lambda text, width: text + ' ' * max(0, width - cells(text))
+     def health(key, name):
+         state = snapshot[key]
+@@ -310,7 +315,8 @@
+         summary = name + '：' + (('↑多 ' + '、'.join(longs) + '  ' if longs else '') + ('↓空 ' + '、'.join(shorts) if shorts else '') if longs or shorts else '等待，暂无有效观察')
+         heading.extend(paint(line, 1 if longs and not shorts else -1 if shorts and not longs else 0) for line in wrapped(summary, width))
+     heading.extend(wrapped(screening_text(snapshot), width))
+-    heading.extend(wrapped('动能0–100：≥70强 / 40–69中 / 20–39弱 / <20中性；方向强度，不是胜率或入场确认', width))
++    grades = display['grades']
++    heading.extend(wrapped(f"动能0–100：≥{grades['strong']:g}强 / ≥{grades['medium']:g}中 / ≥{grades['weak']:g}弱；方向强度，不是入场确认", width))
+     notes = []
+     for position in snapshot['positions']:
+         notes.extend(wrapped(position.split(' | ',1)[0], width))
+@@ -350,13 +356,15 @@
+         lines.extend(paint(line, r['direction']) for line in levels(r))
+     lines += ['─' * min(width, 103)]
+     lines += notes
+-    lines.append(f"[a全部 g Gate i IC] {source} 第{page+1}/{pages}页 · {len(rows)}行 | n/p翻页 q关闭查看·采集继续")
++    lines.append(f"[a全部 g Gate i IC] {source} 第{page+1}/{pages}页 · {len(rows)}行 | n/p翻页 s设置 q关闭查看·采集继续")
+     return '\n'.join(lines), pages
+
+
+ def gate_worker():
+     parent = os.getppid()
+     g = module('combined_gate', GATE / 'gate_watch.py')
++    original_load = g.load_config
++    g.load_config = lambda path: preferences.apply_gate(original_load(path), preferences.load())
+     logging.getLogger().addHandler(logging.NullHandler())
+     class Monitor(g.Monitor):
+         def analyse(self, symbol, ticker, now):
+@@ -387,6 +395,7 @@
+             snapshot = opportunities.gate_shortlist(super().cycle(), self.last_tickers, self.cfg)
+             self.symbols = [row['contract'] for row in snapshot['rows']]
+             self.extras = snapshot['extras']
++            snapshot['rules'] = dict(filters=self.cfg['filters'], strategy=self.cfg['strategy'])
+             return snapshot
+     class UniLossNotifier(g.Notifier):
+         def emit(self, key, *args, **kwargs):
+@@ -503,6 +512,15 @@
+                 return
+             if select.select([sys.stdin], [], [], 2)[0]:
+                 key = sys.stdin.read(1)
++                if key in ('s','S'):
++                    termios.tcsetattr(sys.stdin, termios.TCSADRAIN, original)
++                    sys.stdout.write('\033[?25h\033[H\033[2J')
++                    try:
++                        preferences.edit()
++                        input('回车返回行情…')
++                    finally:
++                        tty.setcbreak(sys.stdin.fileno())
++                        sys.stdout.write('\033[?25l')
+                 if key in ('q','Q'):
+                     return
+                 if key in ('n','N',' ',']'):
+@@ -604,7 +622,15 @@
+                 previous_payload = payload
+             except (OSError, ValueError):
+                 payload = dict(previous_payload, connected=False)
+-            snapshot = combine(gate, payload, analyser, cfg, settings['expected_server'])
++            try:
++                local_preferences = preferences.load()
++                effective = preferences.apply_gate(cfg, local_preferences)
++                if not gate.get('error') and gate.get('rules') != dict(filters=effective['filters'], strategy=effective['strategy']):
++                    gate = dict(gate, error='筛选设置已修改；等待新规则分析完成')
++            except (OSError, ValueError, KeyError, TypeError) as exc:
++                local_preferences = preferences.SCHEMA['defaults']
++                gate = dict(gate, error='动态设置无效：'+str(exc))
++            snapshot = preferences.project(combine(gate, payload, analyser, cfg, settings['expected_server']), local_preferences)
+             try:
+                 acknowledgement = read(source.parent / 'panel_status.json')
+                 loaded = fresh(time.time(), acknowledgement.get('rendered_utc'), 8)
+--- a/mt5/MT5Watch_ReadOnly.mq5
++++ b/mt5/MT5Watch_ReadOnly.mq5
+@@ -1,6 +1,6 @@
+ // Read-only market-data indicator. No trading API, DLL, network upload or account balance access.
+ // Attach ONE instance to ONE chart. Compile locally in MetaEditor (MT5), not MT4.
+-#property version   "1.14"
++#property version   "1.15"
+ #property description "Read-only multi-symbol market data bridge for Mac. Does not trade."
+ #property indicator_separate_window
+ #property indicator_buffers 0
+@@ -239,7 +239,7 @@
+ {
+    datetime now=TimeGMT();
+    datetime server_now=TimeTradeServer();
+-   string out="{\"schema\":1,\"version\":\"1.14\",\"source\":\"MT5 broker CFD\",\"read_only\":true,"+
++   string out="{\"schema\":1,\"version\":\"1.15\",\"source\":\"MT5 broker CFD\",\"read_only\":true,"+
+       "\"generated_utc\":"+I(now)+",\"server_now\":"+I(server_now)+
+       ",\"server\":"+J(active_server)+",\"expected_server\":"+J(ExpectedServer)+
+       ",\"connected\":"+B(connected)+",\"server_matches\":"+B(correct_server)+
+@@ -334,6 +334,20 @@
+    long age=(long)TimeGMT()-(long)value;
+    return value>0 && age>=-5 && age<=seconds;
+ }
++color panel_rise=C'255,107,120', panel_fall=C'78,214,154';
++color PanelColor(string hex,color fallback)
++{
++   if(StringLen(hex)!=7 || StringSubstr(hex,0,1)!="#") return fallback;
++   long rgb=0;
++   for(int i=1;i<7;i++)
++   {
++      string digit=StringSubstr(Upper(hex),i,1);
++      int n=StringFind("0123456789ABCDEF",digit);
++      if(n<0) return fallback;
++      rgb=rgb*16+n;
++   }
++   return (color)(((rgb & 255)<<16) | (rgb & 65280) | ((rgb>>16) & 255));
++}
+ void ReadPanel()
+ {
+    int file=FileOpen(BASE_DIR+"\\combined_panel.tsv",FILE_READ|FILE_TXT|FILE_ANSI|FILE_SHARE_READ|FILE_SHARE_WRITE,0,CP_UTF8);
+@@ -341,7 +355,7 @@
+    string head=FileReadString(file);
+    string h[];
+    int columns=StringSplit(head,9,h);
+-   if((columns!=9 && columns!=10 && columns!=12) || h[0]!="H" || h[1]!="1") { FileClose(file); return; }
++   if((columns!=9 && columns!=10 && columns!=12 && columns!=14) || h[0]!="H" || h[1]!="1") { FileClose(file); return; }
+    string data[];
+    while(!FileIsEnding(file))
+    {
+@@ -359,8 +373,14 @@
+    gate_written=(datetime)StringToInteger(h[4]); gate_health=h[5];
+    ic_written=(datetime)StringToInteger(h[6]); ic_health=h[7]; position_note=h[8];
+    position_until=(columns>=10 ? (datetime)StringToInteger(h[9]) : 0);
+-   position_detail=(columns==12 ? h[10] : "");
+-   screening_note=(columns==12 ? h[11] : "");
++   position_detail=(columns>=12 ? h[10] : "");
++   screening_note=(columns>=12 ? h[11] : "");
++   panel_rise=(columns==14 ? PanelColor(h[12],C'255,107,120') : C'255,107,120');
++   panel_fall=(columns==14 ? PanelColor(h[13],C'78,214,154') : C'78,214,154');
++   ChartSetInteger(0,CHART_COLOR_CHART_UP,panel_rise);
++   ChartSetInteger(0,CHART_COLOR_CHART_DOWN,panel_fall);
++   ChartSetInteger(0,CHART_COLOR_CANDLE_BULL,panel_rise);
++   ChartSetInteger(0,CHART_COLOR_CANDLE_BEAR,panel_fall);
+ }
+ void DrawPanel()
+ {
+@@ -415,14 +435,14 @@
+       bool source_live=(f[1]=="Gate" ? gate_live : ic_live);
+       bool row_live=source_live && (datetime)StringToInteger(f[12])>=TimeGMT();
+       int direction=(row_live ? (int)StringToInteger(f[7]) : 0);
+-      color ink=(direction>0 ? clrLimeGreen : (direction<0 ? clrTomato : clrGold));
++      color ink=(direction>0 ? panel_rise : (direction<0 ? panel_fall : clrGold));
+       string label=(row_live && ArraySize(f)==15 && f[14]!="" ? f[14] : (direction>0 ? "↑多头观察" : (direction<0 ? "↓空头观察" : "等待")));
+       string price=(row_live ? f[3] : "—");
+       string periods=(row_live ? f[4]+" / "+f[5]+" / "+f[6] : "等待 / 等待 / 等待");
+       int y=108+i*69;
+       PanelLabel("row"+I(i)+"a",f[1]+"  "+f[2]+"   "+price+"   | 15m/1h/4h "+periods+" | "+PanelTime((datetime)StringToInteger(f[11])),12,y,clrWhite,11);
+       PanelLabel("row"+I(i)+"b",label+"   入场观察 "+(row_live ? f[8] : "—")+"   止损参考 "+(row_live ? f[9] : "—")+"   止盈参考 "+(row_live ? f[10] : "—"),12,y+21,ink,11);
+-      PanelLabel("row"+I(i)+"c",source_live ? f[13] : "来源过期/停止：暂停观察，旧价位不沿用",12,y+42,clrSilver,10);
++      PanelLabel("row"+I(i)+"c",source_live ? f[13] : "来源过期/停止：暂停观察，旧价位不沿用",12,y+42,(StringFind(f[13],"动能多")>=0 ? panel_rise : (StringFind(f[13],"动能空")>=0 ? panel_fall : clrSilver)),10);
+       if(visible!="[") visible+=",";
+       visible+="{\"source\":"+J(f[1])+",\"symbol\":"+J(f[2])+",\"price\":"+J(price)+",\"direction\":"+I(direction)+"}";
+       drawn++;

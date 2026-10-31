@@ -1,0 +1,49 @@
+{
+  "pinned": [
+    "BTC_USDT",
+    "ETH_USDT",
+    "SOL_USDT",
+    "UNI_USDT",
+    "HYPE_USDT",
+    "ZEC_USDT",
+    "XRP_USDT",
+    "DOGE_USDT",
+    "BNB_USDT",
+    "NEAR_USDT",
+    "LTC_USDT",
+    "SUI_USDT"
+  ],
+  "extra_candidates": [
+    "LINK_USDT",
+    "AVAX_USDT",
+    "ADA_USDT",
+    "AAVE_USDT",
+    "BCH_USDT",
+    "TRX_USDT",
+    "DOT_USDT",
+    "ARB_USDT",
+    "OP_USDT",
+    "ATOM_USDT"
+  ],
+  "extra_count": 3,
+  "filters": {
+    "min_quote_volume_24h": 30000000,
+    "max_spread_pct": 0.08,
+    "max_abs_change_24h_pct": 20.0,
+    "max_range_24h_pct": 30.0,
+    "max_abs_funding_8h_pct": 0.1,
+    "min_listing_days": 30
+  },
+  "strategy": {
+    "candle_limit": 200,
+    "min_candles": 180,
+    "close_grace_seconds": 5,
+    "min_atr_15m_pct": 0.1,
+    "max_atr_15m_pct": 2.5,
+    "min_stop_pct": 0.3,
+    "max_stop_pct": 3.0,
+    "min_net_reward_risk": 1.5,
+    "assumed_taker_fee_rate": 0.0006,
+    "assumed_slippage_rate": 0.0003
+  }
+}

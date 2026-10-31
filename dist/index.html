@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#171719">
   <meta name="description" content="Gate 与 IC 只读行情观察：三周期方向、量比、动能及入场条件。">
   <title>Gate × IC 行情观察</title>
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./style.css?v=gate-direct-1">
   <link rel="icon" href="./mark.svg" type="image/svg+xml">
 </head>
 <body>
@@ -15,7 +15,7 @@
     <span class="readonly">只读观察</span>
   </header>
   <main>
-    <div class="title-row"><div><h1>Gate × IC 行情观察</h1><p id="updated">正在读取行情…</p></div><button id="refresh" type="button">刷新</button></div>
+    <div class="title-row"><div><h1>Gate × IC 行情观察</h1><p id="updated">正在读取行情…</p></div><div class="actions"><button id="settings-open" type="button">设置</button><button id="refresh" type="button">刷新</button></div></div>
     <section class="overview" aria-labelledby="overview-title">
       <div><h2 id="overview-title">当前条件满足</h2><p class="lead"><span id="ready-count">—</span><span> 个观察机会</span></p><p id="overview-reason">连接数据源后显示筛选结果。</p></div>
       <div class="source-health"><p id="gate-health">Gate —</p><p id="ic-health">IC —</p></div>
@@ -33,14 +33,22 @@
     </section>
     <details class="guide"><summary>怎么看量比、动能和机会状态？</summary><div>
       <p><strong>条件满足 · 请核对</strong>：通过当前脚本筛选，仍需人工核对最新报价、止损和仓位。等待状态不等于可以进场。</p>
-      <p><strong>动能 0–100</strong>：70–100 强，40–69 中，20–39 弱，0–19 中性。多、空表示方向，评分不是胜率；评分不会单独触发入场。</p>
-      <p><strong>Gate 量比</strong>：已收盘 15 分钟成交额相对基准均值的倍数。回踩缩量 ≤0.8 倍、确认放量 ≥1.5 倍，还需要趋势、价格形态和成本等条件。</p>
+      <p><strong>动能 0–100</strong>：默认 70 起为强势、40 起为中等、20 起为偏弱，其余盘整，可在设置修改。默认红色多头、绿色空头。评分不是胜率，也不会单独触发入场。</p>
+      <p><strong>Gate 量比</strong>：已收盘 15 分钟成交额相对基准均值的倍数。默认回踩缩量 ≤0.8 倍、确认放量 ≥1.5 倍，可在设置修改；还需要趋势、价格形态和成本等条件。</p>
       <p><strong>IC Tick 比</strong>：经纪商报价活跃度，不是交易所成交量。结构候选的账户费用仍待核实。</p>
-      <p>电脑约每 20 秒同步一次，手机约每 5 秒读取。同步和网络可能有延迟。行情过期时隐藏价格、评分和入场价位；电脑休眠、断网或脚本停止后无法持续更新。</p>
+      <p>Gate 由手机直接读取公开行情，页面在前台时每 60 秒分析一次，电脑关闭也能使用。首次加载历史需要约 20–40 秒。关闭网页或切到后台后暂停，返回时重新核对。行情过期时隐藏报价、评分和计划。</p>
+      <p>IC 仍依赖电脑上的 MT5；电脑关闭时仅 IC 暂停。网页设置保存在当前浏览器，终端使用本机配置，两端不会自动同步设置。</p>
       <p>页面只公开市场观察，不展示交易账号、个人仓位或盈亏，也不自动下单。</p>
     </div></details>
     <footer><span>Market Watch</span><span>时间均为 UTC+8 · 行情来源分别计算</span></footer>
   </main>
-  <script type="module" src="./app.js"></script>
+  <dialog id="settings-dialog" aria-labelledby="settings-title"><form id="settings-form">
+    <div class="section-heading"><h2 id="settings-title">显示与筛选设置</h2><button id="settings-close" type="button" aria-label="关闭设置">关闭</button></div>
+    <p class="settings-note">仅保存在当前浏览器。分级只改变强弱显示；筛选阈值会重新计算 Gate 机会，IC 规则由电脑管理。</p>
+    <fieldset><legend>方向颜色</legend><div class="setting-grid"><label>上涨 / 多头<input type="color" name="rise" value="#ff6b78"></label><label>下跌 / 空头<input type="color" name="fall" value="#4ed69a"></label></div><button id="swap-colors" type="button">交换红绿方向</button></fieldset>
+    <div id="settings-fields"></div><p id="settings-error" role="alert"></p>
+    <div class="settings-actions"><button id="settings-reset" type="button">恢复默认值</button><button type="submit">保存并应用</button></div>
+  </form></dialog>
+  <script type="module" src="./app.js?v=gate-direct-1"></script>
 </body>
 </html>
