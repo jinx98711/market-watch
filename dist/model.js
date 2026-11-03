@@ -1,9 +1,14 @@
-import {DEFAULT_DISPLAY} from './settings.js?v=gate-quotes-2';
+import {DEFAULT_DISPLAY} from './settings.js?v=risk-levels-3';
 export function fresh(now, timestamp, ttl) {return Number.isFinite(timestamp) && timestamp>0 && now-timestamp>=-5 && now-timestamp<=ttl;}
 export function momentum(signed,grades=DEFAULT_DISPLAY.grades) {
   if(!Number.isFinite(signed)||Math.abs(signed)>100)return {label:'—',strength:'',score:null};
   const score=Math.abs(signed),strength=score>=grades.strong?'强':score>=grades.medium?'中':score>=grades.weak?'弱':'中性';
   return {score,strength,tone:strength==='中性'?'neutral':signed>0?'rise':'fall',directionText:strength==='中性'?'中性':signed>0?'↑ 多头':'↓ 空头',levelLabel:{强:'强势',中:'中等',弱:'偏弱',中性:'盘整'}[strength],label:strength==='中性'?`中性 ${score}`:`${signed>0?'多':'空'} ${score} ${strength}`};
+}
+export function recommendation(row){
+  const price=value=>typeof value==='string'&&value.trim()!==''&&Number.isFinite(Number(value))&&Number(value)>0;
+  const valid=row.live&&[-1,1].includes(row.direction)&&['ready','watch','structure'].includes(row.state)&&price(row.stop)&&typeof row.take==='string'&&row.take.split('/').every(price);
+  return valid?{stop:row.stop,take:row.take,note:row.source==='IC'?'结构参考 · 费用待核实':row.state==='ready'?'计划已确认 · 请核对':'观察预案 · 等待入场确认'}:{stop:'等待',take:'等待',note:'等待有效观察计划'};
 }
 export function view(snapshot, now=Date.now()/1000) {
   if(!snapshot||snapshot.schema!==1||!Array.isArray(snapshot.rows))return {sources:{},rows:[],ready:0,stale:true};

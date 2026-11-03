@@ -1,6 +1,6 @@
-import {view,momentum,filterRows,snapshotURLs,combineDirect} from './model.js?v=gate-quotes-2';
-import {GateClient} from './gate-client.js?v=gate-quotes-2';
-import {FIELDS,defaults,loadSettings,validateSettings,applyColors,get,set} from './settings.js?v=gate-quotes-2';
+import {view,momentum,recommendation,filterRows,snapshotURLs,combineDirect} from './model.js?v=risk-levels-3';
+import {GateClient} from './gate-client.js?v=risk-levels-3';
+import {FIELDS,defaults,loadSettings,validateSettings,applyColors,get,set} from './settings.js?v=risk-levels-3';
 const $=id=>document.getElementById(id),esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let gate=null,ic=null,snapshot=null,source='all',dataURL='',loadingIC=false,lastMask='',error='',progress='',opened=new Set(),settings=null,base=null,client=null,generation=0,loadingGate=false;
 const time=t=>t?new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Kuala_Lumpur',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(t*1000)):'—';
@@ -17,14 +17,15 @@ function render(){
   $('notice').hidden=!error;
   $('notice').textContent=error;
   $('markets').innerHTML=rows.map(r=>{
-    const key=r.source+':'+r.symbol,m=momentum(r.momentum,settings?.display.grades),ratio=Number.isFinite(r.ratio)?r.ratio.toFixed(2)+'x':'—';
+    const key=r.source+':'+r.symbol,m=momentum(r.momentum,settings?.display.grades),risk=recommendation(r),ratio=Number.isFinite(r.ratio)?r.ratio.toFixed(2)+'x':'—';
     const periods=r.periods.map((p,index)=>`<span class="${tone(p)}"><span class="frame-label">${['15m','1h','4h'][index]}</span>${esc(p)}</span>`).join(' <span class="desktop-separator"> / </span> ');
     return `<details class="market-row ${r.state} ${r.live?'':'stale'}" data-key="${esc(key)}" ${opened.has(key)?'open':''}>
       <summary class="row-main"><span class="identity"><strong>${esc(r.symbol)}</strong><span>${esc(r.source)} · ${r.source==='IC'?'CFD 报价':'USDT 永续'}</span></span>
       <span class="price">${r.source==='Gate'?`<span class="last-price"><span class="quote-label">Last</span>${esc(r.price)}</span><span class="book-price"><span class="quote-label">Bid</span>${esc(r.bid)}</span><span class="book-price"><span class="quote-label">Ask</span>${esc(r.ask)}</span>`:esc(r.price)}</span><span class="periods">${periods}</span>
       <span class="momentum ${m.tone||'neutral'}"><span class="momentum-heading"><strong>${esc(m.directionText||'等待')}</strong><b>${esc(m.score??'—')}<small>/100</small></b></span><span class="strength">${esc(m.levelLabel||'无评分')}</span><small>${r.source==='Gate'?'量比':'Tick 比'} ${esc(ratio)}</small></span>
-      <span class="opportunity ${r.direction>0?'rise':r.direction<0?'fall':''}">${r.direction?`<b>${r.direction>0?'↑ 做多':'↓ 做空'}</b>`:''}${esc(stateLabel(r))}<small>展开详情</small></span></summary>
-      <div class="row-detail"><p>${esc(r.reason)}</p>${r.live&&r.direction?`<div class="levels"><div><span>入场观察</span><strong>${esc(r.entry)}</strong></div><div><span>止损参考</span><strong>${esc(r.stop)}</strong></div><div><span>止盈参考</span><strong>${esc(r.take)}</strong></div></div>`:''}
+      <span class="opportunity ${r.direction>0?'rise':r.direction<0?'fall':''}">${r.direction?`<b>${r.direction>0?'↑ 做多':'↓ 做空'}</b>`:''}${esc(stateLabel(r))}<small>展开详情</small></span>
+      <span class="recommendations"><span><small>推荐止损</small><strong>${esc(risk.stop)}</strong></span><span><small>推荐止盈 · TP1 / TP2</small><strong>${esc(risk.take)}</strong></span><small class="recommendation-note">${esc(risk.note)}</small></span></summary>
+      <div class="row-detail"><p>${esc(r.reason)}</p>${r.live&&r.direction?`<div class="levels"><div><span>入场观察</span><strong>${esc(r.entry)}</strong></div><div><span>推荐止损</span><strong>${esc(risk.stop)}</strong></div><div><span>推荐止盈 · TP1 / TP2</span><strong>${esc(risk.take)}</strong></div></div>`:''}
       <p>来源更新 ${esc(time(r.updated))} · ${r.live?'有效至 '+esc(time(r.valid_until)):'等待新行情'}</p>
       ${r.source==='IC'?'<p>Bid / Ask 为 IC 独立报价；Tick 比不是交易所成交量。</p>':'<p>成交额量比基于已收盘 15 分钟 K 线，不能单独作为入场依据。</p>'}</div></details>`;
   }).join('')||`<p class="empty">${!gate?'正在连接 Gate…':$('ready-only').checked?'当前筛选范围没有条件满足的机会。':'没有匹配的品种，请更改搜索或来源。'}</p>`;
@@ -92,7 +93,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){client?.ca
 setInterval(refreshGate,60000);setInterval(refreshIC,10000);setInterval(clock,1000);
 async function start(){
   render();refreshIC();
-  try{const r=await fetch('./gate-config.json?v=gate-quotes-2');if(!r.ok)throw Error('规则文件不可用');const config=await r.json();base=defaults(config);settings=loadSettings(config);applyColors(settings.display);configureGate();}
+  try{const r=await fetch('./gate-config.json?v=risk-levels-3');if(!r.ok)throw Error('规则文件不可用');const config=await r.json();base=defaults(config);settings=loadSettings(config);applyColors(settings.display);configureGate();}
   catch(e){error=`无法加载 Gate 筛选规则：${e.message}`;render();}
 }
 start();

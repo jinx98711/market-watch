@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {view,momentum,filterRows,snapshotURLs} from '../dist/model.js';
+import {view,momentum,recommendation,filterRows,snapshotURLs} from '../dist/model.js';
 const fixture=()=>({schema:1,generated_at:1000,sources:{Gate:{state:'正常',updated:999},IC:{state:'正常',updated:999}},rows:[
   {source:'Gate',symbol:'UNI_USDT',price:'6.8',periods:['↑多','↑多','↑多'],state:'ready',direction:1,momentum:70,ratio:1.5,entry:'6.7~6.8',stop:'6.6',take:'7.0',updated:999,valid_until:1100},
   {source:'IC',symbol:'UNIUSD',price:'6.7/6.8',periods:['↑多','↑多','↑多'],state:'structure',direction:1,momentum:69,ratio:.9,entry:'6.7',stop:'6.6',take:'7',updated:999,valid_until:1040}
@@ -20,4 +20,18 @@ test('immutable file lookup waits six seconds for publication and has one fallba
   assert.deepEqual(snapshotURLs('https://example.com/snapshots/',1005),['https://example.com/snapshots/49.json','https://example.com/snapshots/48.json']);
   assert.equal(snapshotURLs('https://example.com/snapshots/',1006)[0],'https://example.com/snapshots/50.json');
   assert.equal(snapshotURLs('https://example.com/snapshots/',1026)[0],'https://example.com/snapshots/51.json');
+});
+test('recommendations expose confirmed, pending and IC structure plans separately',()=>{
+ const x=fixture();let rows=view(x,1001).rows;
+ assert.deepEqual(recommendation(rows[0]),{stop:'6.6',take:'7.0',note:'计划已确认 · 请核对'});
+ assert.match(recommendation(rows[1]).note,/结构参考.*费用待核实/);
+ x.rows[0].state='watch';rows=view(x,1001).rows;assert.match(recommendation(rows[0]).note,/观察预案/);
+ x.rows[0].direction=-1;x.rows[0].stop='7.0';x.rows[0].take='6.4/6.2';assert.equal(recommendation(view(x,1001).rows[0]).take,'6.4/6.2');
+});
+test('recommendations disappear with expired plans, stopped sources and missing levels',()=>{
+ const x=fixture();x.rows[0].valid_until=1002;assert.equal(recommendation(view(x,1003).rows[0]).stop,'等待');
+ for(const change of [{state:'wait'},{stop:'—'},{take:'NaN'},{direction:0},{take:'7/'}]){
+  const data=fixture();Object.assign(data.rows[0],change);const risk=recommendation(view(data,1001).rows[0]);assert.equal(risk.stop,'等待');assert.equal(risk.take,'等待');
+ }
+ const stopped=fixture();stopped.sources.Gate.state='暂停';assert.equal(recommendation(view(stopped,1001).rows[0]).take,'等待');
 });

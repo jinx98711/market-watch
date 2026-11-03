@@ -106,7 +106,7 @@
      return '\n'.join('\t'.join(map(clean, line)) for line in lines) + '\n'
 
 
-@@ -263,6 +269,10 @@
+@@ -263,6 +269,23 @@
      g = f"G{gate.get('evaluated',0)}筛选 确认{gate.get('ready',0)}/等{gate.get('watch',0)}" if gate else 'Gate筛选暂停'
      i = f"IC{ic.get('evaluated',0)}筛选 结构{ic.get('structure',0)}" if ic else 'IC筛选暂停'
      return g+' | '+i
@@ -114,10 +114,23 @@
 +
 +def quote_text(row):
 +    return f"Bid {row.get('bid', '—')} / Ask {row.get('ask', '—')}"
++
++
++def recommendation_text(row):
++    stop, take = row.get('stop', '—'), row.get('take', '—')
++    try:
++        prices = [float(stop)] + [float(value) for value in take.split('/')]
++        active = row.get('direction') in (-1, 1) and all(math.isfinite(value) and value > 0 for value in prices)
++    except (ValueError, TypeError, AttributeError):
++        active = False
++    if not active:
++        return '推荐止损 等待    推荐止盈 等待 · 等待有效观察计划'
++    note = '结构参考·费用待核实' if row['source']=='IC' else ('计划已确认·请核对' if row.get('opportunity', '').startswith('条件满足') else '观察预案·等待入场确认')
++    return f'推荐止损 {stop}    推荐止盈 TP1/TP2 {take} · {note}'
 
 
  def row_label(row):
-@@ -292,7 +302,10 @@
+@@ -292,7 +315,10 @@
      width = max(40, size.columns - 1)
      rows = [r for r in snapshot['rows'] if source == 'all' or r['source'] == source]
      rows.sort(key=lambda r: not bool(r['direction']))
@@ -129,7 +142,7 @@
      pad = lambda text, width: text + ' ' * max(0, width - cells(text))
      def health(key, name):
          state = snapshot[key]
-@@ -310,7 +323,8 @@
+@@ -310,19 +336,23 @@
          summary = name + '：' + (('↑多 ' + '、'.join(longs) + '  ' if longs else '') + ('↓空 ' + '、'.join(shorts) if shorts else '') if longs or shorts else '等待，暂无有效观察')
          heading.extend(paint(line, 1 if longs and not shorts else -1 if shorts and not longs else 0) for line in wrapped(summary, width))
      heading.extend(wrapped(screening_text(snapshot), width))
@@ -139,10 +152,12 @@
      notes = []
      for position in snapshot['positions']:
          notes.extend(wrapped(position.split(' | ',1)[0], width))
-@@ -318,11 +332,13 @@
+     for detail in snapshot.get('position_details', []):
          notes.extend(wrapped(detail, width))
      def levels(row):
-         return wrapped(f"    入场观察 {row['entry']}    止损参考 {row['stop']}    止盈参考 {row['take']}", width) if row['direction'] else []
+-        return wrapped(f"    入场观察 {row['entry']}    止损参考 {row['stop']}    止盈参考 {row['take']}", width) if row['direction'] else []
++        entry = wrapped(f"    入场观察 {row['entry']}", width) if row['direction'] else []
++        return entry + wrapped('    '+recommendation_text(row), width)
 +    def quotes(row):
 +        return wrapped('    '+quote_text(row), width) if row['source']=='Gate' else []
      # Paginate whole observation blocks so their prices always stay together.
@@ -154,7 +169,7 @@
          if chunks[-1] and used + cost > capacity:
              chunks.append([])
              used = 0
-@@ -347,16 +363,19 @@
+@@ -347,16 +377,19 @@
          if tty:
              values[2] = '\033[1m' + values[2] + '\033[0m'
          lines.append('  ' + ' '.join(values))
@@ -175,7 +190,7 @@
      logging.getLogger().addHandler(logging.NullHandler())
      class Monitor(g.Monitor):
          def analyse(self, symbol, ticker, now):
-@@ -385,8 +404,12 @@
+@@ -385,8 +418,12 @@
              return row
          def cycle(self):
              snapshot = opportunities.gate_shortlist(super().cycle(), self.last_tickers, self.cfg)
@@ -188,7 +203,7 @@
              return snapshot
      class UniLossNotifier(g.Notifier):
          def emit(self, key, *args, **kwargs):
-@@ -424,6 +447,8 @@
+@@ -424,6 +461,8 @@
              if row['source'] == source and (not live or 0 < row['valid_until'] < now):
                  row.update(price='—', direction=0, periods=['等待']*3, entry='—', stop='—', take='—',
                             reason='来源或观察数据过期/停止；暂停观察', opportunity='等待')
@@ -197,7 +212,7 @@
                  row.pop('volume', None)
                  row.pop('activity', None)
                  row.pop('momentum', None)
-@@ -503,6 +528,15 @@
+@@ -503,6 +542,15 @@
                  return
              if select.select([sys.stdin], [], [], 2)[0]:
                  key = sys.stdin.read(1)
@@ -213,7 +228,7 @@
                  if key in ('q','Q'):
                      return
                  if key in ('n','N',' ',']'):
-@@ -604,7 +638,15 @@
+@@ -604,7 +652,15 @@
                  previous_payload = payload
              except (OSError, ValueError):
                  payload = dict(previous_payload, connected=False)
@@ -315,7 +330,7 @@
        drawn++;
 --- a/mt5/test_combined_watch.py
 +++ b/mt5/test_combined_watch.py
-@@ -18,6 +18,30 @@
+@@ -18,6 +18,54 @@
 
      def result(self, gate=None, mt5=None, now=NOW):
          return c.combine(self.gate if gate is None else gate, self.mt5 if mt5 is None else mt5, m, self.cfg, m.EXPECTED_SERVER, now)
@@ -343,10 +358,34 @@
 +        self.gate['market_time']=NOW-151
 +        row=self.result()['rows'][0]
 +        self.assertEqual((row['bid'],row['ask']),('—','—'))
++
++    def test_recommendations_show_existing_levels_and_keep_ic_structural(self):
++        gate=self.result()['rows'][0]
++        self.assertIn('推荐止损 88000',c.recommendation_text(gate))
++        self.assertIn('推荐止盈 TP1/TP2 94000/96000',c.recommendation_text(gate))
++        self.assertIn('观察预案',c.recommendation_text(gate))
++        gate['opportunity']='条件满足·请核对'
++        self.assertIn('计划已确认',c.recommendation_text(gate))
++        gate['source']='IC'
++        self.assertIn('结构参考·费用待核实',c.recommendation_text(gate))
++        gate['direction']=-1
++        self.assertIn('推荐止损 88000',c.recommendation_text(gate))
++
++    def test_recommendations_wait_when_missing_or_expired(self):
++        result=self.result()
++        for update in [dict(direction=0),dict(stop='—'),dict(take='NaN'),dict(take='7/')]:
++            row=dict(result['rows'][0],**update)
++            self.assertIn('推荐止损 等待',c.recommendation_text(row))
++            self.assertIn('推荐止盈 等待',c.recommendation_text(row))
++        row=c.guarded_view(result,NOW+301)['rows'][0]
++        self.assertIn('等待有效观察计划',c.recommendation_text(row))
++        text,_=c.render(c.guarded_view(result,NOW+301))
++        self.assertIn('推荐止盈 等待',text)
++        self.assertNotIn('推荐止盈 TP1/TP2 94000/96000',text)
 
      def test_same_asset_is_two_independent_prices(self):
          rows = self.result()['rows']
-@@ -280,6 +304,7 @@
+@@ -280,6 +328,7 @@
          for enabled in (True, False):
              with self.subTest(enabled=enabled), tempfile.TemporaryDirectory() as tmp:
                  with mock.patch.object(c, 'RUNTIME', Path(tmp)), \
