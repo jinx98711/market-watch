@@ -36,6 +36,19 @@ class ExportTests(unittest.TestCase):
         data['rows'][0]['crosses']={'15m':1,'1h':-1,'4h':True,'private':'SECRET'}
         self.assertEqual(export(data)['rows'][0]['crosses'],{'15m':1,'1h':-1})
 
+    def test_net_rr_is_gate_only_and_metrics_disappear_without_a_plan(self):
+        data=fixture()
+        row=data['rows'][0]
+        row.update(net_rr=1.8,entry_distance_atr=0)
+        gate=export(data)['rows'][0]
+        self.assertEqual((gate['net_rr'],gate['entry_distance_atr']),(1.8,0))
+        row.update(source='IC',opportunity_state='structure',structure_confirmed=True)
+        ic=export(data)['rows'][0]
+        self.assertIsNone(ic['net_rr'])
+        self.assertTrue(ic['structure_confirmed'])
+        row.update(direction=0)
+        self.assertIsNone(export(data)['rows'][0]['entry_distance_atr'])
+
     def test_arbitrary_reason_is_not_forwarded(self):
         data=fixture();data['rows'][0].update(direction=0,reason='/Users/private/account=123 SECRET')
         self.assertNotIn('SECRET',json.dumps(export(data)))

@@ -57,7 +57,7 @@ test('clock anomalies and duplicate tickers stop analysis',async()=>{
  const c=new GateClient(cfg);c.request=async()=>({server_time:Date.now()-60000});await assert.rejects(c.syncClock());assert.throws(()=>c.tickers([{contract:'BTC_USDT'},{contract:'BTC_USDT'}]));
 });
 test('eligible extras are ranked by readiness, distance then net reward/risk',()=>{
- const rows=[{contract:'BTC_USDT',state:'blocked'},...['LINK_USDT','AAVE_USDT','ADA_USDT','AVAX_USDT'].map((contract,i)=>({contract,state:i===0?'watch':'ready',plan:{},entry_distance_atr:i===2?1:0,net_rr:2+i}))];
+ const rows=[{contract:'BTC_USDT',state:'blocked'},...['LINK_USDT','AAVE_USDT','ADA_USDT','AVAX_USDT'].map((contract,i)=>({contract,state:i===0?'watch':'ready',plan:{side:'long'},entry_distance_atr:i===2?1:0,net_rr:2+i}))];
  assert.deepEqual(selectRows(rows,{...cfg,extra_count:2}).map(r=>r.contract),['BTC_USDT','AAVE_USDT','AVAX_USDT']);
 });
 test('hourly history is cached only inside the same closed-bar interval',async()=>{
@@ -86,14 +86,14 @@ test('Gate missing, crossed and nonnumeric books show dashes; expiry hides all q
  const expired=view(combined,1151).rows.find(r=>r.source==='Gate');for(const key of ['price','bid','ask'])assert.equal(expired[key],'—');
 });
 
-test('EMA crossings require a new closed-bar intersection and rank only eligible plans',()=>{
+test('EMA crossings require a new closed-bar intersection and cannot outrank a closer plan',()=>{
  const history=Array.from({length:60},()=>({c:100}));
  assert.equal(trendObservation([...history,{c:110}]).cross,1);
  assert.equal(trendObservation([...history,{c:90}]).cross,-1);
  assert.equal(trendObservation([...history,{c:110},{c:110}]).cross,0);
  const row=(contract,state,cross,entry_distance_atr)=>({contract,state,crosses:{'15m':cross},plan:{side:'long'},entry_distance_atr,net_rr:2});
  const rows=[row('ADA_USDT','ready',0,0),row('AAVE_USDT','ready',1,.5),row('LINK_USDT','wait',1,0)];
- assert.deepEqual(selectRows(rows,{...cfg,pinned:[],extra_count:1}).map(x=>x.contract),['AAVE_USDT']);
+ assert.deepEqual(selectRows(rows,{...cfg,pinned:[],extra_count:1}).map(x=>x.contract),['ADA_USDT']);
  const d=displayRow(rows[1],1000,null);
  const data={schema:1,mode:'gate-direct',sources:{Gate:{state:'正常',updated:1000}},rows:[d]};
  assert.deepEqual(view(data,1000).rows[0].crosses,{'15m':1});

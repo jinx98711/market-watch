@@ -1,4 +1,4 @@
-import {FRAMES,num,quality,parseCandles,closedCandles,analyse,selectRows,displayRow} from './gate-engine.js?v=ma-cross-1';
+import {FRAMES,num,quality,parseCandles,closedCandles,analyse,selectRows,displayRow} from './gate-engine.js?v=opportunity-quality-1';
 const BASES=['https://api.gateio.ws/api/v4','https://fx-api.gateio.ws/api/v4'];
 const ALLOWED=new Set(['/spot/time','/futures/usdt/tickers','/futures/usdt/contracts','/futures/usdt/candlesticks']);
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,Math.max(0,ms)));

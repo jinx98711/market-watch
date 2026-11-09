@@ -1,4 +1,5 @@
 // Read-only port of the desktop Gate rules. No accounts, positions or order endpoints.
+import {compareOpportunities} from './ranking.js?v=opportunity-quality-1';
 export const FRAMES={'15m':900,'1h':3600,'4h':14400};
 export function num(value,fallback){
   const n=(typeof value==='number'||typeof value==='string'&&value.trim()!=='')?Number(value):NaN;
@@ -162,18 +163,15 @@ export function analyse(symbol,frames,raw15,contract,ticker,cfg,analysisTime,now
   }catch(e){return {...row,state:'error',side:'wait',plan:null,reason:'数据不完整，暂停信号：'+e.message};}
 }
 export function selectRows(rows,cfg){
-  const aligned = row => {
-    const direction = row.plan.side === 'long' ? 1 : -1;
-    return Object.values(row.crosses || {}).filter(value => value === direction).length;
-  };
   const extra=rows.filter(r=>!cfg.pinned.includes(r.contract)&&['ready','watch'].includes(r.state)&&r.plan)
-    .sort((a,b)=>Number(a.state!=='ready')-Number(b.state!=='ready')||aligned(b)-aligned(a)||a.entry_distance_atr-b.entry_distance_atr||b.net_rr-a.net_rr||a.contract.localeCompare(b.contract)).slice(0,cfg.extra_count);
+    .sort((a,b)=>compareOpportunities(a,b)||a.contract.localeCompare(b.contract)).slice(0,cfg.extra_count);
   const selected=new Set([...cfg.pinned,...extra.map(r=>r.contract)]);return rows.filter(r=>selected.has(r.contract));
 }
 export function displayRow(row,updated,ticker){
   const active=['ready','watch'].includes(row.state)&&row.plan&&row.plan.expires_at>updated,fmt=value=>Number.isFinite(value)?String(value):'—';
   const bid=num(ticker?.highest_bid,0),ask=num(ticker?.lowest_ask,0),bookValid=bid>0&&ask>=bid;
   return {source:'Gate',symbol:row.contract,price:fmt(row.last),bid:bookValid?fmt(bid):'—',ask:bookValid?fmt(ask):'—',periods:['15m','1h','4h'].map(frame=>({long:'↑多',short:'↓空',wait:'盘整'}[row.periods?.[frame]]||'等待')),
+    net_rr:active?row.net_rr??null:null,entry_distance_atr:active?row.entry_distance_atr??null:null,
     crosses:row.crosses||{},direction:active?(row.plan.side==='long'?1:-1):0,state:active?row.state:'wait',momentum:row.momentum??null,ratio:row.volume?.latest_ratio??null,
     entry:active?`${fmt(row.plan.entry_low)}~${fmt(row.plan.entry_high)}`:'—',stop:active?fmt(row.plan.stop):'—',take:active?`${fmt(row.plan.tp1)}/${fmt(row.plan.tp2)}`:'—',reason:row.reason,
     updated,valid_until:active?Math.min(updated+150,row.plan.expires_at):updated+150};

@@ -35,3 +35,17 @@ test('recommendations disappear with expired plans, stopped sources and missing 
  }
  const stopped=fixture();stopped.sources.Gate.state='暂停';assert.equal(recommendation(view(stopped,1001).rows[0]).take,'等待');
 });
+
+test('ranking prioritizes ready and executable plans before directional momentum and crosses',()=>{
+ const plan={source:'Gate',state:'ready',direction:-1,entry_distance_atr:0,net_rr:2};
+ const rows=[
+   {...plan,symbol:'OPPOSITE',momentum:95,crosses:{'15m':-1}},
+   {...plan,symbol:'LOWRR',net_rr:1.6,momentum:-98,crosses:{'15m':-1}},
+   {...plan,symbol:'FAR',entry_distance_atr:.2,net_rr:3,momentum:-90},
+   {...plan,symbol:'BEST',momentum:-61},
+   {...plan,symbol:'WAITING',state:'watch',momentum:-100,net_rr:5},
+   {...plan,symbol:'IC',source:'IC',state:'structure',structure_confirmed:true},
+ ];
+ assert.deepEqual(filterRows(rows,'all','',false).map(row=>row.symbol),
+   ['BEST','OPPOSITE','LOWRR','FAR','IC','WAITING']);
+});

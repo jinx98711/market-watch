@@ -1,4 +1,5 @@
 import {DEFAULT_DISPLAY} from './settings.js?v=risk-levels-3';
+import {compareOpportunities} from './ranking.js?v=opportunity-quality-1';
 export function fresh(now, timestamp, ttl) {return Number.isFinite(timestamp) && timestamp>0 && now-timestamp>=-5 && now-timestamp<=ttl;}
 export function momentum(signed,grades=DEFAULT_DISPLAY.grades) {
   if(!Number.isFinite(signed)||Math.abs(signed)>100)return {label:'—',strength:'',score:null};
@@ -21,6 +22,8 @@ export function view(snapshot, now=Date.now()/1000) {
     const live=!!sources[row.source]?.live&&row.valid_until>0&&now<=row.valid_until;
     const state=live?row.state:'wait';
     return {...row,live,state,price:live?row.price:'—',bid:live?row.bid||'—':'—',ask:live?row.ask||'—':'—',periods:live?row.periods:['等待','等待','等待'],
+      net_rr:live?row.net_rr??null:null,entry_distance_atr:live?row.entry_distance_atr??null:null,
+      structure_confirmed:live&&row.structure_confirmed===true,
       crosses:live?row.crosses||{}:{},momentum:live?row.momentum:null,ratio:live?row.ratio:null,entry:live?row.entry:'—',stop:live?row.stop:'—',take:live?row.take:'—',
       reason:live||sources[row.source]?.live&&row.valid_until===0?row.reason:independent&&row.source==='Gate'?'Gate 行情或计划已过期，等待直连更新':'行情或同步已过期，暂停观察；等待电脑恢复更新'};
   });
@@ -28,11 +31,8 @@ export function view(snapshot, now=Date.now()/1000) {
 }
 export function filterRows(rows,source,search,readyOnly){
   const q=search.trim().toUpperCase();
-  const aligned = row => row.direction
-    ? Object.values(row.crosses || {}).filter(value => value === row.direction).length
-    : 0;
   return rows.filter(r=>(source==='all'||r.source===source)&&r.symbol.includes(q)&&(!readyOnly||r.state==='ready'))
-    .sort((a,b)=>Number(b.state==='ready')-Number(a.state==='ready')||aligned(b)-aligned(a));
+    .sort(compareOpportunities);
 }
 export function snapshotURLs(base,now=Date.now()/1000){
   const bucket=Math.floor((now-6)/20);

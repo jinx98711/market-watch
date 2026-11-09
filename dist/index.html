@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#171719">
   <meta name="description" content="Gate 与 IC 只读行情观察：三周期方向、量比、动能及入场条件。">
   <title>Gate × IC 行情观察</title>
-  <link rel="stylesheet" href="./style.css?v=ma-cross-1">
+  <link rel="stylesheet" href="./style.css?v=opportunity-quality-1">
   <link rel="icon" href="./mark.svg" type="image/svg+xml">
 </head>
 <body>
@@ -34,7 +34,8 @@
     <details class="guide"><summary>怎么看量比、动能和机会状态？</summary><div>
       <p><strong>Gate 报价</strong>：Last 是最新成交价，Bid 是买一，Ask 是卖一，均来自本轮行情。做多条件按 Ask、做空条件按 Bid 核对；缺失或无效的买卖报价显示为 —。</p>
       <p><strong>条件满足 · 请核对</strong>：通过当前脚本筛选，仍需人工核对最新报价、止损和仓位。等待状态不等于可以进场。</p>
-      <p><strong>金叉 / 死叉</strong>：只显示最新收盘 K 线上的 20／50 均线上穿或下穿。Gate 使用 EMA，IC 使用 SMA。同向新交叉会提高符合原条件的候选优先级。</p>
+      <p><strong>金叉 / 死叉</strong>：只显示最新收盘 K 线上的 20／50 均线上穿或下穿。Gate 使用 EMA，IC 使用 SMA。同向动能和新交叉用于区分执行条件相同的计划。</p>
+      <p><strong>机会排序</strong>：Gate 条件满足优先，其次是已收盘确认的 IC 结构，再是等待确认的计划。同组先看离入场区间有多近，Gate 再比较计入估计成本后的净盈亏比。距离用 15 分钟 ATR（近期波动幅度）表示。IC 结构仍需核对账户费用。</p>
       <p><strong>推荐止盈 / 止损</strong>：沿用有效观察计划的结构止损与两档目标，不基于个人持仓成本。Gate 目标约为计划风险距离的 2 倍、3 倍；未确认的计划标为观察预案，IC 仍为费用待核实的结构参考。没有有效计划或行情过期时显示等待。</p>
       <p><strong>动能 0–100</strong>：默认 70 起为强势、40 起为中等、20 起为偏弱，其余盘整，可在设置修改。默认红色多头、绿色空头。评分不是胜率，也不会单独触发入场。</p>
       <p><strong>Gate 量比</strong>：已收盘 15 分钟成交额相对基准均值的倍数。默认回踩缩量 ≤0.8 倍、确认放量 ≥1.5 倍，可在设置修改；还需要趋势、价格形态和成本等条件。</p>
@@ -52,6 +53,6 @@
     <div id="settings-fields"></div><p id="settings-error" role="alert"></p>
     <div class="settings-actions"><button id="settings-reset" type="button">恢复默认值</button><button type="submit">保存并应用</button></div>
   </form></dialog>
-  <script type="module" src="./app.js?v=ma-cross-1"></script>
+  <script type="module" src="./app.js?v=opportunity-quality-1"></script>
 </body>
 </html>
