@@ -23,6 +23,8 @@ export function view(snapshot, now=Date.now()/1000) {
     const state=live?row.state:'wait';
     return {...row,live,state,price:live?row.price:'—',bid:live?row.bid||'—':'—',ask:live?row.ask||'—':'—',periods:live?row.periods:['等待','等待','等待'],
       net_rr:live?row.net_rr??null:null,entry_distance_atr:live?row.entry_distance_atr??null:null,
+      reference_rr:live&&row.source==='IC'&&state==='structure'&&row.direction&&Number.isFinite(row.reference_rr)&&row.reference_rr>0
+        ? row.reference_rr : null,
       structure_confirmed:live&&row.structure_confirmed===true,
       crosses:live?row.crosses||{}:{},momentum:live?row.momentum:null,ratio:live?row.ratio:null,entry:live?row.entry:'—',stop:live?row.stop:'—',take:live?row.take:'—',
       reason:live||sources[row.source]?.live&&row.valid_until===0?row.reason:independent&&row.source==='Gate'?'Gate 行情或计划已过期，等待直连更新':'行情或同步已过期，暂停观察；等待电脑恢复更新'};

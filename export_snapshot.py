@@ -64,6 +64,7 @@ def export(snapshot):
             state = 'wait'
         distance = number(item.get('entry_distance_atr'), None)
         net_rr = number(item.get('net_rr'), None)
+        reference_rr = number(item.get('reference_rr'), None)
         def price(key):
             value = str(item.get(key, '—'))
             return value if re.fullmatch(r'[0-9.,/~— -]{1,60}', value) else '—'
@@ -72,6 +73,7 @@ def export(snapshot):
                          direction=direction, state=state, momentum=momentum,
                          entry_distance_atr=distance if state != 'wait' and distance is not None and distance >= 0 else None,
                          net_rr=net_rr if source == 'Gate' and state in ('ready', 'watch') and net_rr is not None and net_rr > 0 else None,
+                         reference_rr=reference_rr if source == 'IC' and state == 'structure' and reference_rr is not None and reference_rr > 0 else None,
                          structure_confirmed=state == 'structure' and item.get('structure_confirmed') is True,
                          ratio=round(ratio, 3) if ratio is not None and ratio >= 0 else None,
                          entry=price('entry'), stop=price('stop'), take=price('take'), reason=explanation,

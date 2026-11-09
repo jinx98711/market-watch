@@ -49,3 +49,12 @@ test('ranking prioritizes ready and executable plans before directional momentum
  assert.deepEqual(filterRows(rows,'all','',false).map(row=>row.symbol),
    ['BEST','OPPOSITE','LOWRR','FAR','IC','WAITING']);
 });
+
+test('IC reference reward/risk only appears on live structure plans',()=>{
+ const data=fixture();
+ data.rows[1].reference_rr=1.78;
+ assert.equal(view(data,1001).rows[1].reference_rr,1.78);
+ assert.equal(view(data,1045).rows[1].reference_rr,null);
+ data.rows[1].state='wait';
+ assert.equal(view(data,1001).rows[1].reference_rr,null);
+});

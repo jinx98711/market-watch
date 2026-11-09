@@ -1,4 +1,4 @@
-import {view,momentum,recommendation,filterRows,snapshotURLs,combineDirect} from './model.js?v=opportunity-quality-1';
+import {view,momentum,recommendation,filterRows,snapshotURLs,combineDirect} from './model.js?v=ic-reference-rr-1';
 import {GateClient} from './gate-client.js?v=opportunity-quality-1';
 import {FIELDS,defaults,loadSettings,validateSettings,applyColors,get,set} from './settings.js?v=risk-levels-3';
 const $=id=>document.getElementById(id),esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -27,7 +27,8 @@ function render(){
     const distance = r.direction && Number.isFinite(r.entry_distance_atr)
       ? (r.entry_distance_atr === 0 ? '在观察区间' : '距区间 ' + r.entry_distance_atr.toFixed(2) + ' ATR') : '';
     const netRR = r.direction && Number.isFinite(r.net_rr) ? '估算净盈亏比 ' + r.net_rr.toFixed(2) + ':1' : '';
-    const quality = [distance, netRR].filter(Boolean).join(' · ');
+    const referenceRR = Number.isFinite(r.reference_rr) ? '参考盈亏比 ' + r.reference_rr.toFixed(2) + ':1（费用待核实）' : '';
+    const quality = [distance, netRR, referenceRR].filter(Boolean).join(' · ');
     const periods=r.periods.map((p,index)=>`<span class="${tone(p)}"><span class="frame-label">${['15m','1h','4h'][index]}</span>${esc(p)}</span>`).join(' <span class="desktop-separator"> / </span> ');
     return `<details class="market-row ${r.state} ${r.live?'':'stale'}" data-key="${esc(key)}" ${opened.has(key)?'open':''}>
       <summary class="row-main"><span class="identity"><strong>${esc(r.symbol)}</strong><span>${esc(r.source)} · ${r.source==='IC'?'CFD 报价':'USDT 永续'}</span></span>
