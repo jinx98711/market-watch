@@ -14,8 +14,23 @@ export function atr(bars,allowZero=false){
   let value=mean(tr.slice(0,14));for(const x of tr.slice(14))value=(13*value+x)/14;
   return allowZero&&value===0?0:positive(value);
 }
-export function trend(bars){const c=bars.map(b=>b.c),a=ema(c),b=ema(c,50);
-  return c.at(-1)>a.at(-1)&&a.at(-1)>b.at(-1)&&a.at(-1)>a.at(-4)?'long':c.at(-1)<a.at(-1)&&a.at(-1)<b.at(-1)&&a.at(-1)<a.at(-4)?'short':'wait';}
+export function trendObservation(bars) {
+  const closes = bars.map(bar => bar.c);
+  const fast = ema(closes), slow = ema(closes, 50);
+  const previous = fast.at(-2) - slow.at(-2);
+  const current = fast.at(-1) - slow.at(-1);
+  let cross = 0;
+  if (closes.length >= 51) {
+    if (previous <= 0 && current > 0) cross = 1;
+    else if (previous >= 0 && current < 0) cross = -1;
+  }
+  const close = closes.at(-1);
+  let direction = 'wait';
+  if (close > fast.at(-1) && current > 0 && fast.at(-1) > fast.at(-4)) direction = 'long';
+  else if (close < fast.at(-1) && current < 0 && fast.at(-1) < fast.at(-4)) direction = 'short';
+  return {direction, cross};
+}
+export function trend(bars) { return trendObservation(bars).direction; }
 export function parseCandles(raw,step,now){
   if(!Array.isArray(raw)||!raw.length)throw Error('未收到有效 K 线');
   const seen=new Set();return raw.map(r=>{
@@ -125,7 +140,13 @@ export function analyse(symbol,frames,raw15,contract,ticker,cfg,analysisTime,now
   const row={contract:symbol,last:ticker?num(ticker.last,0):null,state:'wait',side:'wait',plan:null};
   const q=quality(ticker,contract,cfg,now);
   try{
-    row.periods=Object.fromEntries(Object.entries(frames).map(([frame,bars])=>[frame,trend(bars)]));
+    row.periods = {};
+    row.crosses = {};
+    for (const [frame, bars] of Object.entries(frames)) {
+      const {direction, cross} = trendObservation(bars);
+      row.periods[frame] = direction;
+      if (cross) row.crosses[frame] = cross;
+    }
     row.momentum=momentumScore(frames);
     if(!q.ok)return {...row,state:'blocked',reason:q.reason};
     Object.assign(row,buildPlan(symbol,frames,contract,cfg,analysisTime));row.taker_fee_rate=Math.max(0,num(contract.taker_fee_rate,0));
@@ -141,15 +162,19 @@ export function analyse(symbol,frames,raw15,contract,ticker,cfg,analysisTime,now
   }catch(e){return {...row,state:'error',side:'wait',plan:null,reason:'数据不完整，暂停信号：'+e.message};}
 }
 export function selectRows(rows,cfg){
+  const aligned = row => {
+    const direction = row.plan.side === 'long' ? 1 : -1;
+    return Object.values(row.crosses || {}).filter(value => value === direction).length;
+  };
   const extra=rows.filter(r=>!cfg.pinned.includes(r.contract)&&['ready','watch'].includes(r.state)&&r.plan)
-    .sort((a,b)=>Number(a.state!=='ready')-Number(b.state!=='ready')||a.entry_distance_atr-b.entry_distance_atr||b.net_rr-a.net_rr||a.contract.localeCompare(b.contract)).slice(0,cfg.extra_count);
+    .sort((a,b)=>Number(a.state!=='ready')-Number(b.state!=='ready')||aligned(b)-aligned(a)||a.entry_distance_atr-b.entry_distance_atr||b.net_rr-a.net_rr||a.contract.localeCompare(b.contract)).slice(0,cfg.extra_count);
   const selected=new Set([...cfg.pinned,...extra.map(r=>r.contract)]);return rows.filter(r=>selected.has(r.contract));
 }
 export function displayRow(row,updated,ticker){
   const active=['ready','watch'].includes(row.state)&&row.plan&&row.plan.expires_at>updated,fmt=value=>Number.isFinite(value)?String(value):'—';
   const bid=num(ticker?.highest_bid,0),ask=num(ticker?.lowest_ask,0),bookValid=bid>0&&ask>=bid;
   return {source:'Gate',symbol:row.contract,price:fmt(row.last),bid:bookValid?fmt(bid):'—',ask:bookValid?fmt(ask):'—',periods:['15m','1h','4h'].map(frame=>({long:'↑多',short:'↓空',wait:'盘整'}[row.periods?.[frame]]||'等待')),
-    direction:active?(row.plan.side==='long'?1:-1):0,state:active?row.state:'wait',momentum:row.momentum??null,ratio:row.volume?.latest_ratio??null,
+    crosses:row.crosses||{},direction:active?(row.plan.side==='long'?1:-1):0,state:active?row.state:'wait',momentum:row.momentum??null,ratio:row.volume?.latest_ratio??null,
     entry:active?`${fmt(row.plan.entry_low)}~${fmt(row.plan.entry_high)}`:'—',stop:active?fmt(row.plan.stop):'—',take:active?`${fmt(row.plan.tp1)}/${fmt(row.plan.tp2)}`:'—',reason:row.reason,
     updated,valid_until:active?Math.min(updated+150,row.plan.expires_at):updated+150};
 }

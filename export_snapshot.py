@@ -45,6 +45,11 @@ def export(snapshot):
         if len(periods) != 3:
             periods = ['等待']*3
         periods = [p if p in ('↑多', '↓空', '盘整', '等待') else '等待' for p in periods]
+        raw_crosses = item.get('crosses')
+        crosses = {}
+        if isinstance(raw_crosses, dict):
+            crosses = {frame: raw_crosses[frame] for frame in ('15m', '1h', '4h')
+                       if type(raw_crosses.get(frame)) is int and raw_crosses[frame] in (-1, 1)}
         raw_momentum = item.get('momentum') or {}
         signed = number(raw_momentum.get('signed_score'), None)
         momentum = int(signed) if raw_momentum.get('state') == 'valid' and signed is not None and -100 <= signed <= 100 else None
@@ -61,7 +66,7 @@ def export(snapshot):
             value = str(item.get(key, '—'))
             return value if re.fullmatch(r'[0-9.,/~— -]{1,60}', value) else '—'
         explanation = '已通过当前脚本筛选；请人工核对实时报价与风险' if state == 'ready' else reason(item.get('reason'))
-        rows.append(dict(source=source, symbol=symbol, price=price('price'), periods=periods,
+        rows.append(dict(source=source, symbol=symbol, price=price('price'), periods=periods, crosses=crosses,
                          direction=direction, state=state, momentum=momentum,
                          ratio=round(ratio, 3) if ratio is not None and ratio >= 0 else None,
                          entry=price('entry'), stop=price('stop'), take=price('take'), reason=explanation,

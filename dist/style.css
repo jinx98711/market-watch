@@ -17,3 +17,6 @@ dialog{color:var(--ink);background:var(--ground);border:1px solid var(--line);bo
 @media(max-width:640px){.book-price{font-size:12px}.price:has(.last-price){min-width:105px}}
 .recommendations{grid-column:1/-1;display:grid;grid-template-columns:1fr 1.5fr 1.5fr;align-items:end;gap:12px;padding-top:8px}.recommendations>span{min-width:0}.recommendations small{display:block;color:var(--muted);font-size:12px;line-height:1.5}.recommendations strong{display:block;margin-top:3px;font-size:14px;font-weight:600;overflow-wrap:anywhere}.recommendation-note{text-align:right}
 @media(max-width:640px){.recommendations{grid-template-columns:1fr 1.5fr;gap:8px}.recommendation-note{grid-column:1/-1;text-align:left}}
+
+.crosses{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:13px;color:var(--muted)}
+.crosses .rise,.crosses .fall{font-weight:700}

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {analyse,buildPlan,volumeSignal,ema,atr,parseCandles,closedCandles,rounded,quality,selectRows,evaluate,displayRow} from '../dist/gate-engine.js';
+import {analyse,buildPlan,volumeSignal,ema,atr,parseCandles,closedCandles,rounded,quality,selectRows,evaluate,displayRow,trendObservation} from '../dist/gate-engine.js';
 import {GateClient} from '../dist/gate-client.js';
 import {combineDirect,view,momentum} from '../dist/model.js';
 import {defaults,validateSettings,loadSettings} from '../dist/settings.js';
@@ -84,4 +84,18 @@ test('Gate missing, crossed and nonnumeric books show dashes; expiry hides all q
  const combined=combineDirect({generated_at:1000,source,rows:[good]},null);
  assert.equal(view(combined,1001).rows.find(r=>r.source==='Gate').bid,'100.4');
  const expired=view(combined,1151).rows.find(r=>r.source==='Gate');for(const key of ['price','bid','ask'])assert.equal(expired[key],'—');
+});
+
+test('EMA crossings require a new closed-bar intersection and rank only eligible plans',()=>{
+ const history=Array.from({length:60},()=>({c:100}));
+ assert.equal(trendObservation([...history,{c:110}]).cross,1);
+ assert.equal(trendObservation([...history,{c:90}]).cross,-1);
+ assert.equal(trendObservation([...history,{c:110},{c:110}]).cross,0);
+ const row=(contract,state,cross,entry_distance_atr)=>({contract,state,crosses:{'15m':cross},plan:{side:'long'},entry_distance_atr,net_rr:2});
+ const rows=[row('ADA_USDT','ready',0,0),row('AAVE_USDT','ready',1,.5),row('LINK_USDT','wait',1,0)];
+ assert.deepEqual(selectRows(rows,{...cfg,pinned:[],extra_count:1}).map(x=>x.contract),['AAVE_USDT']);
+ const d=displayRow(rows[1],1000,null);
+ const data={schema:1,mode:'gate-direct',sources:{Gate:{state:'正常',updated:1000}},rows:[d]};
+ assert.deepEqual(view(data,1000).rows[0].crosses,{'15m':1});
+ assert.deepEqual(view(data,1151).rows[0].crosses,{});
 });

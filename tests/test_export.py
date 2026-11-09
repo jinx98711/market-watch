@@ -31,6 +31,11 @@ class ExportTests(unittest.TestCase):
         data=fixture();data['rows'][0]['price']='SECRET_ACCOUNT'
         self.assertEqual(export(data)['rows'][0]['price'],'—')
 
+    def test_only_valid_crossover_frames_and_directions_are_public(self):
+        data=fixture()
+        data['rows'][0]['crosses']={'15m':1,'1h':-1,'4h':True,'private':'SECRET'}
+        self.assertEqual(export(data)['rows'][0]['crosses'],{'15m':1,'1h':-1})
+
     def test_arbitrary_reason_is_not_forwarded(self):
         data=fixture();data['rows'][0].update(direction=0,reason='/Users/private/account=123 SECRET')
         self.assertNotIn('SECRET',json.dumps(export(data)))
