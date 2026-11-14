@@ -23,17 +23,18 @@ test('immutable file lookup waits six seconds for publication and has one fallba
 });
 test('recommendations expose confirmed, pending and IC structure plans separately',()=>{
  const x=fixture();let rows=view(x,1001).rows;
- assert.deepEqual(recommendation(rows[0]),{stop:'6.6',take:'7.0',note:'计划已确认 · 请核对'});
- assert.match(recommendation(rows[1]).note,/结构参考.*费用待核实/);
- x.rows[0].state='watch';rows=view(x,1001).rows;assert.match(recommendation(rows[0]).note,/观察预案/);
+ assert.deepEqual(recommendation(rows[0]),{entry:'6.7~6.8',stop:'6.6',take:'7.0',confirmed:true});
+ assert.deepEqual(recommendation(rows[1]),{entry:'6.7',stop:'6.6',take:'7',confirmed:false});
+ x.rows[1].structure_confirmed=true;assert.equal(recommendation(view(x,1001).rows[1]).confirmed,true);
+ x.rows[0].state='watch';rows=view(x,1001).rows;assert.equal(recommendation(rows[0]).confirmed,false);
  x.rows[0].direction=-1;x.rows[0].stop='7.0';x.rows[0].take='6.4/6.2';assert.equal(recommendation(view(x,1001).rows[0]).take,'6.4/6.2');
 });
 test('recommendations disappear with expired plans, stopped sources and missing levels',()=>{
- const x=fixture();x.rows[0].valid_until=1002;assert.equal(recommendation(view(x,1003).rows[0]).stop,'等待');
- for(const change of [{state:'wait'},{stop:'—'},{take:'NaN'},{direction:0},{take:'7/'}]){
-  const data=fixture();Object.assign(data.rows[0],change);const risk=recommendation(view(data,1001).rows[0]);assert.equal(risk.stop,'等待');assert.equal(risk.take,'等待');
+ const x=fixture();x.rows[0].valid_until=1002;assert.equal(recommendation(view(x,1003).rows[0]),null);
+ for(const change of [{state:'wait'},{entry:'—'},{entry:'6.7~'},{stop:'—'},{take:'NaN'},{direction:0},{take:'7/'}]){
+  const data=fixture();Object.assign(data.rows[0],change);assert.equal(recommendation(view(data,1001).rows[0]),null);
  }
- const stopped=fixture();stopped.sources.Gate.state='暂停';assert.equal(recommendation(view(stopped,1001).rows[0]).take,'等待');
+ const stopped=fixture();stopped.sources.Gate.state='暂停';assert.equal(recommendation(view(stopped,1001).rows[0]),null);
 });
 
 test('ranking prioritizes ready and executable plans before directional momentum and crosses',()=>{

@@ -8,8 +8,11 @@ export function momentum(signed,grades=DEFAULT_DISPLAY.grades) {
 }
 export function recommendation(row){
   const price=value=>typeof value==='string'&&value.trim()!==''&&Number.isFinite(Number(value))&&Number(value)>0;
-  const valid=row.live&&[-1,1].includes(row.direction)&&['ready','watch','structure'].includes(row.state)&&price(row.stop)&&typeof row.take==='string'&&row.take.split('/').every(price);
-  return valid?{stop:row.stop,take:row.take,note:row.source==='IC'?'结构参考 · 费用待核实':row.state==='ready'?'计划已确认 · 请核对':'观察预案 · 等待入场确认'}:{stop:'等待',take:'等待',note:'等待有效观察计划'};
+  const levels=(value,separator)=>typeof value==='string'&&value.split(separator).length<=2&&value.split(separator).every(price);
+  if(!row.live||![-1,1].includes(row.direction)||!['ready','watch','structure'].includes(row.state)||
+    !levels(row.entry,'~')||!price(row.stop)||!levels(row.take,'/'))return null;
+  const confirmed=row.source==='IC'?row.structure_confirmed===true:row.state==='ready';
+  return {entry:row.entry,stop:row.stop,take:row.take,confirmed};
 }
 export function view(snapshot, now=Date.now()/1000) {
   if(!snapshot||snapshot.schema!==1||!Array.isArray(snapshot.rows))return {sources:{},rows:[],ready:0,stale:true};
