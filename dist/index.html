@@ -25,7 +25,7 @@
       <div class="section-heading"><h2 id="list-title">观察名单</h2><span id="row-count">—</span></div>
       <div class="filters">
         <div class="tabs" role="group" aria-label="行情来源"><button type="button" data-source="all" aria-pressed="true">全部</button><button type="button" data-source="Gate" aria-pressed="false">Gate</button><button type="button" data-source="IC" aria-pressed="false">IC</button></div>
-        <label class="ready-filter"><input id="ready-only" type="checkbox">仅看条件满足</label>
+        <label class="ready-filter"><input id="plans-only" type="checkbox">仅有效预案</label>
         <label class="search"><span class="sr-only">搜索品种</span><input id="search" type="search" placeholder="搜索 UNI、BTC…" autocomplete="off"></label>
       </div>
       <div class="table-heading" aria-hidden="true"><span>来源 / 品种</span><span>Last / Bid / Ask</span><span>15m / 1h / 4h</span><span>动能 / 100</span><span>机会状态</span></div>
@@ -53,6 +53,6 @@
     <div id="settings-fields"></div><p id="settings-error" role="alert"></p>
     <div class="settings-actions"><button id="settings-reset" type="button">恢复默认值</button><button type="submit">保存并应用</button></div>
   </form></dialog>
-  <script type="module" src="./app.js?v=visible-plans-1"></script>
+  <script type="module" src="./app.js?v=valid-plans-filter-1"></script>
 </body>
 </html>

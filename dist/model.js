@@ -34,9 +34,9 @@ export function view(snapshot, now=Date.now()/1000) {
   });
   return {sources,rows,ready:rows.filter(r=>r.state==='ready').length,stale:independent?!sources.Gate.live&&!sources.IC.live:!running};
 }
-export function filterRows(rows,source,search,readyOnly){
+export function filterRows(rows,source,search,plansOnly){
   const q=search.trim().toUpperCase();
-  return rows.filter(r=>(source==='all'||r.source===source)&&r.symbol.includes(q)&&(!readyOnly||r.state==='ready'))
+  return rows.filter(r=>(source==='all'||r.source===source)&&r.symbol.includes(q)&&(!plansOnly||recommendation(r)))
     .sort(compareOpportunities);
 }
 export function snapshotURLs(base,now=Date.now()/1000){

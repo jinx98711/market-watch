@@ -1,4 +1,4 @@
-import {view,momentum,recommendation,filterRows,snapshotURLs,combineDirect} from './model.js?v=visible-plans-1';
+import {view,momentum,recommendation,filterRows,snapshotURLs,combineDirect} from './model.js?v=valid-plans-filter-1';
 import {GateClient} from './gate-client.js?v=opportunity-quality-1';
 import {FIELDS,defaults,loadSettings,validateSettings,applyColors,get,set} from './settings.js?v=risk-levels-3';
 const $=id=>document.getElementById(id),esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -11,7 +11,7 @@ const stateLabel=(r,plan)=>!r.live?'过期 / 暂停':!plan?'等待':
 const tone=text=>/[↑多]/.test(text)?'rise':/[↓空]/.test(text)?'fall':'neutral';
 function render(){
   snapshot=combineDirect(gate,ic);
-  const result=view(snapshot),rows=filterRows(result.rows,source,$('search').value,$('ready-only').checked),ready=rows.filter(r=>r.state==='ready').length;
+  const result=view(snapshot),rows=filterRows(result.rows,source,$('search').value,$('plans-only').checked),ready=rows.filter(r=>r.state==='ready').length;
   $('ready-count').textContent=gate?ready:'—';
   const g=snapshot.screening.Gate.evaluated||0,i=snapshot.screening.IC.evaluated||0;
   $('overview-reason').textContent=progress||(!gate?'正在连接 Gate 公开行情。':result.stale?'行情已过期，旧信号已暂停。':result.ready?'列表显示预案价位，展开可查看有效期。':`Gate 筛选 ${g} 个候选 · IC 筛选 ${i} 个候选，继续等待。`);
@@ -43,7 +43,7 @@ function render(){
       <div class="row-detail"><p>${esc(r.reason)}</p>
       <p>来源更新 ${esc(time(r.updated))} · ${r.live?'有效至 '+esc(time(r.valid_until)):'等待新行情'}</p>
       ${r.source==='IC'?'<p>Bid / Ask 为 IC 独立报价；Tick 比不是交易所成交量。</p>':'<p>成交额量比基于已收盘 15 分钟 K 线，不能单独作为入场依据。</p>'}</div></details>`;
-  }).join('')||`<p class="empty">${!gate?'正在连接 Gate…':$('ready-only').checked?'当前筛选范围没有条件满足的机会。':'没有匹配的品种，请更改搜索或来源。'}</p>`;
+  }).join('')||`<p class="empty">${!gate?'正在连接 Gate…':$('plans-only').checked?'当前筛选范围没有有效预案。':'没有匹配的品种，请更改搜索或来源。'}</p>`;
   lastMask=result.rows.map(r=>r.live?'1':'0').join('')+result.stale;clock();
 }
 function clock(){
@@ -102,7 +102,7 @@ $('settings-form').addEventListener('submit',event=>{
   }catch(e){$('settings-error').textContent=e.message;}
 });
 document.querySelectorAll('[data-source]').forEach(button=>button.addEventListener('click',()=>{source=button.dataset.source;document.querySelectorAll('[data-source]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));render();}));
-$('refresh').addEventListener('click',()=>{refreshGate();refreshIC();});$('search').addEventListener('input',render);$('ready-only').addEventListener('change',render);
+$('refresh').addEventListener('click',()=>{refreshGate();refreshIC();});$('search').addEventListener('input',render);$('plans-only').addEventListener('change',render);
 $('markets').addEventListener('toggle',event=>{const key=event.target.dataset.key;if(key){if(event.target.open)opened.add(key);else opened.delete(key);}},true);
 document.addEventListener('visibilitychange',()=>{if(document.hidden){client?.cancel();generation++;loadingGate=false;progress='';$('refresh').disabled=false;$('refresh').textContent='刷新';}else{configureGate();refreshIC();}});
 setInterval(refreshGate,60000);setInterval(refreshIC,10000);setInterval(clock,1000);
