@@ -6,6 +6,13 @@ export function momentum(signed,grades=DEFAULT_DISPLAY.grades) {
   const score=Math.abs(signed),strength=score>=grades.strong?'强':score>=grades.medium?'中':score>=grades.weak?'弱':'中性';
   return {score,strength,tone:strength==='中性'?'neutral':signed>0?'rise':'fall',directionText:strength==='中性'?'中性':signed>0?'↑ 多头':'↓ 空头',levelLabel:{强:'强势',中:'中等',弱:'偏弱',中性:'盘整'}[strength],label:strength==='中性'?`中性 ${score}`:`${signed>0?'多':'空'} ${score} ${strength}`};
 }
+export function trend(row){
+  if(!row.live)return {label:'暂停',tone:'paused'};
+  const [,h1,h4]=row.periods||[];
+  if(h1==='↑多'&&h4===h1)return {label:'偏多',tone:'rise'};
+  if(h1==='↓空'&&h4===h1)return {label:'偏空',tone:'fall'};
+  return {label:'观望',tone:'neutral'};
+}
 export function recommendation(row){
   const price=value=>typeof value==='string'&&value.trim()!==''&&Number.isFinite(Number(value))&&Number(value)>0;
   const levels=(value,separator)=>typeof value==='string'&&value.split(separator).length<=2&&value.split(separator).every(price);

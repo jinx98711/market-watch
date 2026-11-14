@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#171719">
   <meta name="description" content="Gate 与 IC 只读行情观察：三周期方向、量比、动能及入场条件。">
   <title>Gate × IC 行情观察</title>
-  <link rel="stylesheet" href="./style.css?v=visible-plans-1">
+  <link rel="stylesheet" href="./style.css?v=card-trend-1">
   <link rel="icon" href="./mark.svg" type="image/svg+xml">
 </head>
 <body>
@@ -31,7 +31,8 @@
       <div class="table-heading" aria-hidden="true"><span>来源 / 品种</span><span>Last / Bid / Ask</span><span>15m / 1h / 4h</span><span>动能 / 100</span><span>机会状态</span></div>
       <div id="markets" aria-live="polite"><p class="empty">正在读取监控快照…</p></div>
     </section>
-    <details class="guide"><summary>怎么看量比、动能和机会状态？</summary><div>
+    <details class="guide"><summary>怎么看趋势、动能和机会状态？</summary><div>
+      <p><strong>卡片趋势</strong>：H4 和 H1 同向时显示「偏多」或「偏空」，其余有效行情显示「观望」。数据过期或不可用时显示「暂停」。入场仍看预案状态。</p>
       <p><strong>Gate 报价</strong>：Last 是最新成交价，Bid 是买一，Ask 是卖一，均来自本轮行情。做多条件按 Ask、做空条件按 Bid 核对；缺失或无效的买卖报价显示为 —。</p>
       <p><strong>条件满足 · 请核对</strong>：通过当前脚本筛选，仍需人工核对最新报价、止损和仓位。等待状态不等于可以进场。</p>
       <p><strong>金叉 / 死叉</strong>：只显示最新收盘 K 线上的 20／50 均线上穿或下穿。Gate 使用 EMA，IC 使用 SMA。同向动能和新交叉用于区分执行条件相同的计划。</p>
@@ -53,6 +54,6 @@
     <div id="settings-fields"></div><p id="settings-error" role="alert"></p>
     <div class="settings-actions"><button id="settings-reset" type="button">恢复默认值</button><button type="submit">保存并应用</button></div>
   </form></dialog>
-  <script type="module" src="./app.js?v=valid-plans-filter-1"></script>
+  <script type="module" src="./app.js?v=card-trend-1"></script>
 </body>
 </html>

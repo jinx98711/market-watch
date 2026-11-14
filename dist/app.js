@@ -1,4 +1,4 @@
-import {view,momentum,recommendation,filterRows,snapshotURLs,combineDirect} from './model.js?v=valid-plans-filter-1';
+import {view,momentum,trend,recommendation,filterRows,snapshotURLs,combineDirect} from './model.js?v=card-trend-1';
 import {GateClient} from './gate-client.js?v=opportunity-quality-1';
 import {FIELDS,defaults,loadSettings,validateSettings,applyColors,get,set} from './settings.js?v=risk-levels-3';
 const $=id=>document.getElementById(id),esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -20,6 +20,7 @@ function render(){
   $('notice').textContent=error;
   $('markets').innerHTML=rows.map(r=>{
     const key=r.source+':'+r.symbol,m=momentum(r.momentum,settings?.display.grades),risk=recommendation(r),ratio=Number.isFinite(r.ratio)?r.ratio.toFixed(2)+'x':'—';
+    const bias=trend(r);
     const crosses = ['15m', '1h', '4h'].map(frame => {
       const side = r.crosses[frame];
       if (side === 1) return `<span class="rise">${frame} 金叉</span>`;
@@ -33,7 +34,7 @@ function render(){
     const quality = [distance, netRR, referenceRR].filter(Boolean).join(' · ');
     const periods=r.periods.map((p,index)=>`<span class="${tone(p)}"><span class="frame-label">${['15m','1h','4h'][index]}</span>${esc(p)}</span>`).join(' <span class="desktop-separator"> / </span> ');
     return `<details class="market-row ${r.state} ${r.live?'':'stale'}" data-key="${esc(key)}" ${opened.has(key)?'open':''}>
-      <summary class="row-main"><span class="identity"><strong>${esc(r.symbol)}</strong><span>${esc(r.source)} · ${r.source==='IC'?'CFD 报价':'USDT 永续'}</span></span>
+      <summary class="row-main"><span class="identity"><strong>${esc(r.symbol)}</strong><span>${esc(r.source)} · ${r.source==='IC'?'CFD 报价':'USDT 永续'}</span><span class="trend ${bias.tone}">${bias.label}</span></span>
       <span class="price">${r.source==='Gate'?`<span class="last-price"><span class="quote-label">Last</span>${esc(r.price)}</span><span class="book-price"><span class="quote-label">Bid</span>${esc(r.bid)}</span><span class="book-price"><span class="quote-label">Ask</span>${esc(r.ask)}</span>`:esc(r.price)}</span><span class="periods">${periods}</span>
       <span class="momentum ${m.tone||'neutral'}"><span class="momentum-heading"><strong>${esc(m.directionText||'等待')}</strong><b>${esc(m.score??'—')}<small>/100</small></b></span><span class="strength">${esc(m.levelLabel||'无评分')}</span><small>${r.source==='Gate'?'量比':'Tick 比'} ${esc(ratio)}</small></span>
       <span class="opportunity ${r.direction>0?'rise':r.direction<0?'fall':''}">${risk?`<b>${r.direction>0?'↑ 做多':'↓ 做空'}</b>`:''}${esc(stateLabel(r,risk))}<small>展开详情</small></span>

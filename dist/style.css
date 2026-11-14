@@ -22,3 +22,7 @@ dialog{color:var(--ink);background:var(--ground);border:1px solid var(--line);bo
 .crosses .rise,.crosses .fall{font-weight:700}
 
 .plan-quality{grid-column:1/-1;color:var(--muted);font-size:13px}
+.identity .trend{display:inline-block;margin-top:7px;font-size:15px;font-weight:800;color:var(--warning)}
+.identity .trend.rise{color:var(--rise)}
+.identity .trend.fall{color:var(--fall)}
+.identity .trend.paused{color:var(--muted)}

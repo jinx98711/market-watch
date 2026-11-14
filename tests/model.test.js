@@ -1,11 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {view,momentum,recommendation,filterRows,snapshotURLs} from '../dist/model.js';
+import {view,momentum,trend,recommendation,filterRows,snapshotURLs} from '../dist/model.js';
 const fixture=()=>({schema:1,generated_at:1000,sources:{Gate:{state:'正常',updated:999},IC:{state:'正常',updated:999}},rows:[
   {source:'Gate',symbol:'UNI_USDT',price:'6.8',periods:['↑多','↑多','↑多'],state:'ready',direction:1,momentum:70,ratio:1.5,entry:'6.7~6.8',stop:'6.6',take:'7.0',updated:999,valid_until:1100},
   {source:'IC',symbol:'UNIUSD',price:'6.7/6.8',periods:['↑多','↑多','↑多'],state:'structure',direction:1,momentum:69,ratio:.9,entry:'6.7',stop:'6.6',take:'7',updated:999,valid_until:1040}
 ]});
 test('ready count excludes IC structures',()=>assert.equal(view(fixture(),1001).ready,1));
+test('card trend uses only H1 and H4 even without an entry plan and pauses on expiry',()=>{
+ const x=fixture();
+ const row=x.rows[0];
+ Object.assign(row,{state:'wait',direction:0,entry:'—',stop:'—',take:'—'});
+ for(const [periods,label,tone] of [
+   [['↓空','↑多','↑多'],'偏多','rise'],
+   [['↑多','↓空','↓空'],'偏空','fall'],
+   [['↑多','↑多','↓空'],'观望','neutral'],
+   [['↑多','盘整','↑多'],'观望','neutral'],
+   [['↓空','↓空','等待'],'观望','neutral']
+ ]){
+   row.periods=periods;
+   assert.deepEqual(trend(view(x,1001).rows[0]),{label,tone});
+ }
+ row.periods=['↑多','↑多','↑多'];
+ row.valid_until=1001;
+ assert.deepEqual(trend(view(x,1002).rows[0]),{label:'暂停',tone:'paused'});
+});
 test('source prices and momentum remain independent',()=>{const r=view(fixture(),1001).rows;assert.notEqual(r[0].price,r[1].price);assert.equal(r[0].momentum,70);assert.equal(r[1].momentum,69);});
 test('IC expires independently of Gate',()=>{const r=view(fixture(),1045);assert.equal(r.rows[1].price,'—');assert.equal(r.rows[1].momentum,null);assert.equal(r.rows[0].state,'ready');});
 test('plan expiry hides entry and old signal before source expires',()=>{const x=fixture();x.rows[0].valid_until=1002;const r=view(x,1003).rows[0];assert.equal(r.entry,'—');assert.equal(r.state,'wait');assert.equal(r.price,'—');});
