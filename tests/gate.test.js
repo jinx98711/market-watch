@@ -114,3 +114,13 @@ test('intraday uses M5 closes for both sides and expires after one M5 bar',()=>{
     assert.equal(evaluate(row,c.ticker,signal,row.plan.expires_at,new Map(),c.cfg,'intraday').state,'expired');
   }
 });
+
+test('intraday fills unused candidate slots with eligible waiting rows, after plans',()=>{
+ const plan={contract:'PLAN_USDT',state:'watch',plan:{side:'long'}};
+ const high={contract:'HIGH_USDT',state:'wait',turnover:25e6};
+ const low={contract:'LOW_USDT',state:'wait',turnover:16e6};
+ const blocked={contract:'BLOCK_USDT',state:'blocked',turnover:99e6};
+ const config={pinned:[],extra_count:2};
+ assert.deepEqual(selectRows([plan,high,low,blocked],config,'intraday').map(r=>r.contract),['PLAN_USDT','HIGH_USDT']);
+ assert.deepEqual(selectRows([plan,high,low,blocked],config).map(r=>r.contract),['PLAN_USDT']);
+});

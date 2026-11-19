@@ -1,10 +1,14 @@
-import {SCAN_FRAMES,num,quality,parseCandles,closedCandles,analyse,selectRows,displayRow} from './gate-engine.js?v=intraday-1';
+import {SCAN_FRAMES,num,quality,parseCandles,closedCandles,analyse,selectRows,displayRow} from './gate-engine.js?v=ic-intraday-1';
 const BASES=['https://api.gateio.ws/api/v4','https://fx-api.gateio.ws/api/v4'];
 const ALLOWED=new Set(['/spot/time','/futures/usdt/tickers','/futures/usdt/contracts','/futures/usdt/candlesticks']);
+const turnover=ticker=>num(ticker.volume_24h_quote??ticker.volume_24h_usd,0);
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,Math.max(0,ms)));
 export class GateClient{
   constructor(config,{fetcher=globalThis.fetch,onProgress=()=>{},mode='standard'}={}){
-    this.config=config;this.mode=mode;this.frames=SCAN_FRAMES[mode];this.fetcher=fetcher.bind(globalThis);this.onProgress=onProgress;this.cache=new Map();this.contracts=new Map();this.metadataAt=0;this.invalid=new Map();this.nextAt=0;this.serverAt=0;this.clockAt=0;this.base=BASES[0];this.controller=null;
+    this.config=mode==='intraday'
+      ? {...config,extra_count:6,filters:{...config.filters,min_quote_volume_24h:config.filters.min_quote_volume_24h/3}}
+      : config;
+    this.mode=mode;this.frames=SCAN_FRAMES[mode];this.fetcher=fetcher.bind(globalThis);this.onProgress=onProgress;this.cache=new Map();this.contracts=new Map();this.metadataAt=0;this.invalid=new Map();this.nextAt=0;this.serverAt=0;this.clockAt=0;this.base=BASES[0];this.controller=null;
   }
   now(){return this.serverAt+(performance.now()-this.clockAt)/1000;}
   cancel(){this.controller?.abort();this.nextAt=0;}
@@ -65,7 +69,14 @@ export class GateClient{
     this.controller=new AbortController();this.nextAt=performance.now();const started=performance.now();
     this.onProgress('校准 Gate 时间');await this.syncClock();const analysisTime=this.now();
     let tickers=this.tickers(await this.request('/futures/usdt/tickers'));this.onProgress('读取合约与历史 K 线');await this.metadata(analysisTime);
-    const symbols=[...new Set([...this.config.pinned,...this.config.extra_candidates])],histories=new Map();let index=0,completed=0;
+    const symbols=[...new Set([...this.config.pinned,...this.config.extra_candidates])];
+    if(this.mode==='intraday'){
+      const candidates=[...tickers.entries()]
+        .filter(([symbol,ticker])=>/^[A-Z0-9]+_USDT$/.test(symbol)&&!symbols.includes(symbol)&&quality(ticker,this.contracts.get(symbol),this.config,analysisTime).ok)
+        .sort(([left,a],[right,b])=>turnover(b)-turnover(a)||(left<right?-1:1));
+      symbols.push(...candidates.slice(0,8).map(([symbol])=>symbol));
+    }
+    const histories=new Map();let index=0,completed=0;
     const worker=async()=>{while(index<symbols.length){
       const symbol=symbols[index++],q=quality(tickers.get(symbol),this.contracts.get(symbol),this.config,analysisTime);
       if(!q.ok&&!this.config.pinned.includes(symbol)){histories.set(symbol,{blocked:q.reason});completed++;continue;}
@@ -93,7 +104,7 @@ export class GateClient{
       if(data.error)return {contract:symbol,last:ticker?num(ticker.last,0):null,state:'error',reason:'历史数据不完整：'+data.error,side:'wait',plan:null};
       return analyse(symbol,data.frames,data.rawSignal,this.contracts.get(symbol),ticker,this.config,analysisTime,now,this.invalid,this.mode);
     });
-    const selected=selectRows(analysed,this.config);
+    const selected=selectRows(analysed,this.config,this.mode);
     return {generated_at:now,source:{state:'正常',updated:now,generated_at:now},rows:selected.map(r=>displayRow(r,now,tickers.get(r.contract),this.mode)),
       screening:{evaluated:symbols.length,ready:analysed.filter(r=>r.state==='ready').length,watch:analysed.filter(r=>r.state==='watch').length,structure:0}};
   }

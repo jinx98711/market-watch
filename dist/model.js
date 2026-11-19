@@ -51,7 +51,7 @@ export function snapshotURLs(base,now=Date.now()/1000){
   return [bucket,bucket-1].map(value=>new URL(`${value}.json`,base).href);
 }
 export function combineDirect(gate,ic){
-  const placeholders=['XAUUSD','BTCUSD','ETHUSD','UNIUSD'].map(symbol=>({source:'IC',symbol,price:'—',periods:['等待','等待','等待'],state:'wait',direction:0,momentum:null,ratio:null,entry:'—',stop:'—',take:'—',reason:'IC 需要电脑运行 MT5；当前同步不可用',updated:0,valid_until:0}));
+  const placeholders=['XAUUSD','BTCUSD','ETHUSD','UNIUSD','USDJPY','US30'].map(symbol=>({source:'IC',symbol,price:'—',periods:['等待','等待','等待'],state:'wait',direction:0,momentum:null,ratio:null,entry:'—',stop:'—',take:'—',reason:'IC 需要电脑运行 MT5；当前同步不可用',updated:0,valid_until:0}));
   const gateRows=gate?.rows||[],icRows=ic?.rows?.filter(row=>row.source==='IC')||placeholders,remaining=[...icRows],rows=[];
   const gold=remaining.find(row=>row.symbol==='XAUUSD');if(gold){rows.push(gold);remaining.splice(remaining.indexOf(gold),1);}
   for(const row of gateRows){rows.push(row);const symbol=row.symbol.replace('_USDT','USD'),match=remaining.find(row=>row.symbol===symbol);if(match){rows.push(match);remaining.splice(remaining.indexOf(match),1);}}

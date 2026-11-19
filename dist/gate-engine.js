@@ -156,6 +156,7 @@ export function analyse(symbol,frames,rawSignal,contract,ticker,cfg,analysisTime
     }
     row.momentum=momentumScore(frames,mode);
     if(!q.ok)return {...row,state:'blocked',reason:q.reason};
+    if(mode==='intraday')row.turnover=num(ticker.volume_24h_quote??ticker.volume_24h_usd,0);
     Object.assign(row,buildPlan(symbol,frames,contract,cfg,analysisTime,mode));row.taker_fee_rate=Math.max(0,num(contract.taker_fee_rate,0));
     evaluate(row,ticker,rawSignal,now,invalid,cfg,mode);
     if(['ready','watch'].includes(row.state)&&row.plan){
@@ -170,9 +171,14 @@ export function analyse(symbol,frames,rawSignal,contract,ticker,cfg,analysisTime
     }return row;
   }catch(e){return {...row,state:'error',side:'wait',plan:null,reason:'数据不完整，暂停信号：'+e.message};}
 }
-export function selectRows(rows,cfg){
+export function selectRows(rows,cfg,mode='standard'){
   const extra=rows.filter(r=>!cfg.pinned.includes(r.contract)&&['ready','watch'].includes(r.state)&&r.plan)
     .sort((a,b)=>compareOpportunities(a,b)||a.contract.localeCompare(b.contract)).slice(0,cfg.extra_count);
+  if(mode==='intraday'&&extra.length<cfg.extra_count){
+    const waiting=rows.filter(r=>!cfg.pinned.includes(r.contract)&&r.state==='wait'&&r.turnover>0)
+      .sort((a,b)=>b.turnover-a.turnover||a.contract.localeCompare(b.contract));
+    extra.push(...waiting.slice(0,cfg.extra_count-extra.length));
+  }
   const selected=new Set([...cfg.pinned,...extra.map(r=>r.contract)]);return rows.filter(r=>selected.has(r.contract));
 }
 export function displayRow(row,updated,ticker,mode='standard'){

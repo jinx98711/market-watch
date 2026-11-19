@@ -1,6 +1,6 @@
-import {view,momentum,trend,recommendation,filterRows,snapshotURLs,combineDirect} from './model.js?v=card-trend-1';
-import {SCAN_FRAMES} from './gate-engine.js?v=intraday-1';
-import {GateClient} from './gate-client.js?v=intraday-1';
+import {view,momentum,trend,recommendation,filterRows,snapshotURLs,combineDirect} from './model.js?v=ic-intraday-1';
+import {SCAN_FRAMES} from './gate-engine.js?v=ic-intraday-1';
+import {GateClient} from './gate-client.js?v=ic-intraday-1';
 import {FIELDS,defaults,loadSettings,validateSettings,applyColors,get,set} from './settings.js?v=risk-levels-3';
 const $=id=>document.getElementById(id),esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let mode='standard';
@@ -13,11 +13,9 @@ const stateLabel=(r,plan)=>!r.live?'过期 / 暂停':!plan?'等待':
 const tone=text=>/[↑多]/.test(text)?'rise':/[↓空]/.test(text)?'fall':'neutral';
 function render(){
   const intraday=mode==='intraday',frames=Object.keys(SCAN_FRAMES[mode]);
-  snapshot=combineDirect(gate,intraday?{rows:[]}:ic);
-  $('sources').hidden=intraday;
-  $('ic-health').hidden=intraday;
+  snapshot=combineDirect(gate,intraday?ic?.intraday:ic);
   $('period-heading').textContent=frames.join(' / ');
-  const result=view(snapshot),rows=filterRows(result.rows,intraday?'Gate':source,$('search').value,$('plans-only').checked),ready=rows.filter(r=>r.state==='ready').length;
+  const result=view(snapshot),rows=filterRows(result.rows,source,$('search').value,$('plans-only').checked),ready=rows.filter(r=>r.state==='ready').length;
   $('ready-count').textContent=gate?ready:'—';
   const g=snapshot.screening.Gate.evaluated||0,i=snapshot.screening.IC.evaluated||0;
   $('overview-reason').textContent=progress||(!gate?'正在连接 Gate 公开行情。':result.stale?'行情已过期，旧信号已暂停。':result.ready?'列表显示预案价位，展开可查看有效期。':`Gate 筛选 ${g} 个候选 · IC 筛选 ${i} 个候选，继续等待。`);
@@ -69,7 +67,7 @@ async function refreshGate(){
   finally{if(token===generation){loadingGate=false;progress='';$('refresh').disabled=false;$('refresh').textContent='刷新';render();}}
 }
 async function refreshIC(){
-  if(loadingIC||document.hidden||mode==='intraday')return;loadingIC=true;
+  if(loadingIC||document.hidden)return;loadingIC=true;
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),8000);
   try{
     if(!dataURL){const r=await fetch('./config.json',{cache:'no-store',signal:controller.signal});if(!r.ok)throw Error();dataURL=(await r.json()).data_base;}
@@ -112,7 +110,7 @@ $('scan-mode').addEventListener('change',event=>{
   mode=event.target.value;
   error='';
   if(settings)configureGate();else render();
-  if(mode==='standard')refreshIC();
+  refreshIC();
 });
 document.querySelectorAll('[data-source]').forEach(button=>button.addEventListener('click',()=>{source=button.dataset.source;document.querySelectorAll('[data-source]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));render();}));
 $('refresh').addEventListener('click',()=>{refreshGate();refreshIC();});$('search').addEventListener('input',render);$('plans-only').addEventListener('change',render);

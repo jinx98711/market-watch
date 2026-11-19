@@ -30,7 +30,7 @@ def reason(text):
     return next((public for key, public in choices if key in str(text)), '等待完整行情与收盘确认')
 
 
-def export(snapshot):
+def export(snapshot, ic_only=False):
     sources = {}
     for name, key in [('Gate', 'gate'), ('IC', 'mt5')]:
         state = snapshot.get(key, {})
@@ -39,7 +39,7 @@ def export(snapshot):
     rows = []
     for item in snapshot.get('rows', []):
         source, symbol = item.get('source'), item.get('symbol', '')
-        if source not in sources or not re.fullmatch(r'[A-Z][A-Z0-9_.+-]{0,29}', symbol):
+        if (ic_only and source != 'IC') or source not in sources or not re.fullmatch(r'[A-Z][A-Z0-9_.+-]{0,29}', symbol):
             continue
         periods = item.get('periods', [])
         if len(periods) != 3:
@@ -48,7 +48,7 @@ def export(snapshot):
         raw_crosses = item.get('crosses')
         crosses = {}
         if isinstance(raw_crosses, dict):
-            crosses = {frame: raw_crosses[frame] for frame in ('15m', '1h', '4h')
+            crosses = {frame: raw_crosses[frame] for frame in (('5m', '15m', '1h') if ic_only else ('15m', '1h', '4h'))
                        if type(raw_crosses.get(frame)) is int and raw_crosses[frame] in (-1, 1)}
         raw_momentum = item.get('momentum') or {}
         signed = number(raw_momentum.get('signed_score'), None)

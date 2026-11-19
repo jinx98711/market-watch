@@ -26,8 +26,16 @@ def api(path, payload=None, method='PUT'):
 
 
 def publish(config, state):
-    snapshot = json.loads(Path(config['source']).read_text(encoding='utf-8-sig'))
-    payload = json.dumps(export(snapshot), ensure_ascii=False, separators=(',', ':'), allow_nan=False).encode()
+    source = Path(config['source'])
+    snapshot = json.loads(source.read_text(encoding='utf-8-sig'))
+    public = export(snapshot)
+    try:
+        short = json.loads(source.with_name('snapshot_intraday.json').read_text(encoding='utf-8-sig'))
+        if short.get('intraday') is True and abs(time.time()-short['generated_at']) <= 8:
+            public['intraday'] = export(short, ic_only=True)
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        pass
+    payload = json.dumps(public, ensure_ascii=False, separators=(',', ':'), allow_nan=False).encode()
     digest = hashlib.sha256(payload).hexdigest()
     bucket = int(time.time()//20)
     if state.get('bucket') == bucket or state.get('digest') == digest:

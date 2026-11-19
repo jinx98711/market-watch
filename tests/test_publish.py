@@ -25,6 +25,24 @@ class PublishTests(unittest.TestCase):
         self.assertNotIn('PRIVATE',base64.b64decode(payload['content']).decode())
         self.assertEqual(state['bucket'],50)
 
+    def test_public_intraday_feed_keeps_only_fresh_ic_market_fields(self):
+        with tempfile.TemporaryDirectory() as tmp, patch('publish.time.time', return_value=1001), patch('publish.api') as api:
+            api.return_value = {'content': {'sha': 'new'}}
+            config = self.fixture(tmp)
+            rows = [dict(source='IC',symbol='USDJPY',crosses={'5m':1,'4h':-1}, account='PRIVATE'),
+                    dict(source='Gate',symbol='UNI_USDT')]
+            short = Path(tmp)/'snapshot_intraday.json'
+            short.write_text(json.dumps(dict(intraday=True,generated_at=1000,rows=rows,positions=['PRIVATE'])))
+            publish(config,{})
+            data = json.loads(base64.b64decode(api.call_args.args[1]['content']))
+            self.assertEqual([row['symbol'] for row in data['intraday']['rows']], ['USDJPY'])
+            self.assertEqual(data['intraday']['rows'][0]['crosses'], {'5m':1})
+            self.assertNotIn('PRIVATE',json.dumps(data))
+            short.write_text(json.dumps(dict(intraday=True,generated_at=900,rows=rows)))
+            publish(config,{})
+            data = json.loads(base64.b64decode(api.call_args.args[1]['content']))
+            self.assertNotIn('intraday',data)
+
     def test_one_publish_per_bucket(self):
         with tempfile.TemporaryDirectory() as tmp,patch('publish.time.time',return_value=1001),patch('publish.api') as api:
             state={'bucket':50};self.assertEqual(publish(self.fixture(tmp),state),state);api.assert_not_called()
