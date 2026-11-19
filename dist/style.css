@@ -26,3 +26,7 @@ dialog{color:var(--ink);background:var(--ground);border:1px solid var(--line);bo
 .identity .trend.rise{color:var(--rise)}
 .identity .trend.fall{color:var(--fall)}
 .identity .trend.paused{color:var(--muted)}
+
+.scan-mode{display:flex;align-items:center;gap:12px;margin-bottom:12px;color:var(--muted)}
+.scan-mode select{min-height:44px;max-width:100%;padding:0 12px;font:inherit;color:var(--ink);background:var(--surface);border:1px solid #55545d;border-radius:6px}
+#sources[hidden]{display:none}

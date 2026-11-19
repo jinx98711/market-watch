@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#171719">
   <meta name="description" content="Gate 与 IC 只读行情观察：三周期方向、量比、动能及入场条件。">
   <title>Gate × IC 行情观察</title>
-  <link rel="stylesheet" href="./style.css?v=card-trend-1">
+  <link rel="stylesheet" href="./style.css?v=intraday-1">
   <link rel="icon" href="./mark.svg" type="image/svg+xml">
 </head>
 <body>
@@ -23,23 +23,28 @@
     <div id="notice" class="notice" role="status" hidden></div>
     <section aria-labelledby="list-title" class="market-section">
       <div class="section-heading"><h2 id="list-title">观察名单</h2><span id="row-count">—</span></div>
+      <label class="scan-mode"><span>筛选模式</span><select id="scan-mode">
+        <option value="standard">常规 · Gate / IC</option>
+        <option value="intraday">日内短线 · Gate</option>
+      </select></label>
       <div class="filters">
-        <div class="tabs" role="group" aria-label="行情来源"><button type="button" data-source="all" aria-pressed="true">全部</button><button type="button" data-source="Gate" aria-pressed="false">Gate</button><button type="button" data-source="IC" aria-pressed="false">IC</button></div>
+        <div id="sources" class="tabs" role="group" aria-label="行情来源"><button type="button" data-source="all" aria-pressed="true">全部</button><button type="button" data-source="Gate" aria-pressed="false">Gate</button><button type="button" data-source="IC" aria-pressed="false">IC</button></div>
         <label class="ready-filter"><input id="plans-only" type="checkbox">仅有效预案</label>
         <label class="search"><span class="sr-only">搜索品种</span><input id="search" type="search" placeholder="搜索 UNI、BTC…" autocomplete="off"></label>
       </div>
-      <div class="table-heading" aria-hidden="true"><span>来源 / 品种</span><span>Last / Bid / Ask</span><span>15m / 1h / 4h</span><span>动能 / 100</span><span>机会状态</span></div>
+      <div class="table-heading" aria-hidden="true"><span>来源 / 品种</span><span>Last / Bid / Ask</span><span id="period-heading">15m / 1h / 4h</span><span>动能 / 100</span><span>机会状态</span></div>
       <div id="markets" aria-live="polite"><p class="empty">正在读取监控快照…</p></div>
     </section>
     <details class="guide"><summary>怎么看趋势、动能和机会状态？</summary><div>
-      <p><strong>卡片趋势</strong>：H4 和 H1 同向时显示「偏多」或「偏空」，其余有效行情显示「观望」。数据过期或不可用时显示「暂停」。入场仍看预案状态。</p>
+      <p><strong>卡片趋势</strong>：常规模式看 H4 和 H1，日内短线看 H1 和 M15。两周期同向时显示「偏多」或「偏空」，其余有效行情显示「观望」。数据过期或不可用时显示「暂停」。入场仍看预案状态。</p>
       <p><strong>Gate 报价</strong>：Last 是最新成交价，Bid 是买一，Ask 是卖一，均来自本轮行情。做多条件按 Ask、做空条件按 Bid 核对；缺失或无效的买卖报价显示为 —。</p>
       <p><strong>条件满足 · 请核对</strong>：通过当前脚本筛选，仍需人工核对最新报价、止损和仓位。等待状态不等于可以进场。</p>
       <p><strong>金叉 / 死叉</strong>：只显示最新收盘 K 线上的 20／50 均线上穿或下穿。Gate 使用 EMA，IC 使用 SMA。同向动能和新交叉用于区分执行条件相同的计划。</p>
       <p><strong>机会排序</strong>：Gate 条件满足优先，其次是已收盘确认的 IC 结构，再是等待确认的计划。同组先看离入场区间有多近，Gate 再比较计入估计成本后的净盈亏比。距离用 15 分钟 ATR（近期波动幅度）表示。IC 参考盈亏比以观察区间的保守入场价和 TP1 计算，计入点差和假设滑点，账户费用待核实。</p>
       <p><strong>入场、止损与止盈</strong>：列表直接显示有效预案的价位。未确认时标为「观察」，IC 结构的账户费用待核实。行情过期或预案失效时隐藏价位。</p>
       <p><strong>动能 0–100</strong>：默认 70 起为强势、40 起为中等、20 起为偏弱，其余盘整，可在设置修改。默认红色多头、绿色空头。评分不是胜率，也不会单独触发入场。</p>
-      <p><strong>Gate 量比</strong>：已收盘 15 分钟成交额相对基准均值的倍数。默认回踩缩量 ≤0.8 倍、确认放量 ≥1.5 倍，可在设置修改；还需要趋势、价格形态和成本等条件。</p>
+      <p><strong>日内短线</strong>使用 Gate 的 M5 收盘确认。预案最多保留一个 M5 周期，确认需通过量能和实时买卖报价核验。</p>
+      <p><strong>Gate 量比</strong>：信号周期已收盘成交额相对基准均值的倍数。默认回踩缩量 ≤0.8 倍、确认放量 ≥1.5 倍，可在设置修改；还需要趋势、价格形态和成本等条件。</p>
       <p><strong>IC Tick 比</strong>：经纪商报价活跃度，不是交易所成交量。结构候选的账户费用仍待核实。</p>
       <p>Gate 由手机直接读取公开行情，页面在前台时每 60 秒分析一次，电脑关闭也能使用。首次加载历史需要约 20–40 秒。关闭网页或切到后台后暂停，返回时重新核对。行情过期时隐藏报价、评分和计划。</p>
       <p>IC 仍依赖电脑上的 MT5；电脑关闭时仅 IC 暂停。网页设置保存在当前浏览器，终端使用本机配置，两端不会自动同步设置。</p>
@@ -54,6 +59,6 @@
     <div id="settings-fields"></div><p id="settings-error" role="alert"></p>
     <div class="settings-actions"><button id="settings-reset" type="button">恢复默认值</button><button type="submit">保存并应用</button></div>
   </form></dialog>
-  <script type="module" src="./app.js?v=card-trend-1"></script>
+  <script type="module" src="./app.js?v=intraday-1"></script>
 </body>
 </html>

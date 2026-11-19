@@ -99,3 +99,18 @@ test('EMA crossings require a new closed-bar intersection and cannot outrank a c
  assert.deepEqual(view(data,1000).rows[0].crosses,{'15m':1});
  assert.deepEqual(view(data,1151).rows[0].crosses,{});
 });
+
+test('intraday uses M5 closes for both sides and expires after one M5 bar',()=>{
+  for(const name of ['long','short']){
+    const c=data.cases.find(item=>item.name===name);
+    const signal=c.frames['15m'].map(bar=>({...bar,t:data.analysisTime-5+(bar.t-c.frames['15m'].at(-1).t)/3-300}));
+    const frames={'5m':signal,'15m':c.frames['1h'],'1h':c.frames['4h']};
+    const row=analyse('BTC_USDT',frames,signal,c.meta,c.ticker,c.cfg,data.analysisTime,data.analysisTime,new Map(),'intraday');
+    assert.equal(row.side,name);
+    assert.equal(row.state,'ready');
+    assert.equal(row.plan.expires_at-row.plan.created_at,300);
+    assert.equal(row.plan.atr_15m,undefined);
+    assert.equal(displayRow(row,data.analysisTime,c.ticker,'intraday').valid_until,data.analysisTime+150);
+    assert.equal(evaluate(row,c.ticker,signal,row.plan.expires_at,new Map(),c.cfg,'intraday').state,'expired');
+  }
+});

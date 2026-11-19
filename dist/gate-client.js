@@ -1,10 +1,10 @@
-import {FRAMES,num,quality,parseCandles,closedCandles,analyse,selectRows,displayRow} from './gate-engine.js?v=opportunity-quality-1';
+import {SCAN_FRAMES,num,quality,parseCandles,closedCandles,analyse,selectRows,displayRow} from './gate-engine.js?v=intraday-1';
 const BASES=['https://api.gateio.ws/api/v4','https://fx-api.gateio.ws/api/v4'];
 const ALLOWED=new Set(['/spot/time','/futures/usdt/tickers','/futures/usdt/contracts','/futures/usdt/candlesticks']);
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,Math.max(0,ms)));
 export class GateClient{
-  constructor(config,{fetcher=globalThis.fetch,onProgress=()=>{}}={}){
-    this.config=config;this.fetcher=fetcher.bind(globalThis);this.onProgress=onProgress;this.cache=new Map();this.contracts=new Map();this.metadataAt=0;this.invalid=new Map();this.nextAt=0;this.serverAt=0;this.clockAt=0;this.base=BASES[0];this.controller=null;
+  constructor(config,{fetcher=globalThis.fetch,onProgress=()=>{},mode='standard'}={}){
+    this.config=config;this.mode=mode;this.frames=SCAN_FRAMES[mode];this.fetcher=fetcher.bind(globalThis);this.onProgress=onProgress;this.cache=new Map();this.contracts=new Map();this.metadataAt=0;this.invalid=new Map();this.nextAt=0;this.serverAt=0;this.clockAt=0;this.base=BASES[0];this.controller=null;
   }
   now(){return this.serverAt+(performance.now()-this.clockAt)/1000;}
   cancel(){this.controller?.abort();this.nextAt=0;}
@@ -47,8 +47,8 @@ export class GateClient{
     this.contracts=collected;this.metadataAt=now;
   }
   async candles(symbol,frame,now){
-    const step=FRAMES[frame],key=symbol+':'+frame,old=this.cache.get(key),s=this.config.strategy;
-    if(frame!=='15m'&&old&&Math.floor((old.fetched-s.close_grace_seconds)/step)===Math.floor((now-s.close_grace_seconds)/step)){
+    const step=this.frames[frame],key=symbol+':'+frame,old=this.cache.get(key),s=this.config.strategy;
+    if(frame!==Object.keys(this.frames)[0]&&old&&Math.floor((old.fetched-s.close_grace_seconds)/step)===Math.floor((now-s.close_grace_seconds)/step)){
       try{return {closed:closedCandles(old.raw,step,now,s.min_candles,s.close_grace_seconds),raw:old.raw};}catch{}
     }
     const incremental=old&&now-old.raw.at(-1).t<2*step;
@@ -70,8 +70,14 @@ export class GateClient{
       const symbol=symbols[index++],q=quality(tickers.get(symbol),this.contracts.get(symbol),this.config,analysisTime);
       if(!q.ok&&!this.config.pinned.includes(symbol)){histories.set(symbol,{blocked:q.reason});completed++;continue;}
       try{
-        const frames={},raws={};for(const frame of Object.keys(FRAMES)){const data=await this.candles(symbol,frame,analysisTime);frames[frame]=data.closed;raws[frame]=data.raw;}
-        histories.set(symbol,{frames,raw15:raws['15m']});
+        const frames={},intervals=Object.keys(this.frames);
+        let rawSignal;
+        for(const frame of intervals){
+          const data=await this.candles(symbol,frame,analysisTime);
+          frames[frame]=data.closed;
+          if(frame===intervals[0])rawSignal=data.raw;
+        }
+        histories.set(symbol,{frames,rawSignal});
       }catch(e){if(this.controller.signal.aborted)throw e;histories.set(symbol,{error:e.message});}
       completed++;this.onProgress(`历史分析 ${completed}/${symbols.length}`);
     }};
@@ -85,10 +91,10 @@ export class GateClient{
       const data=histories.get(symbol),ticker=tickers.get(symbol);
       if(data.blocked)return {contract:symbol,last:ticker?num(ticker.last,0):null,state:'blocked',reason:data.blocked,side:'wait',plan:null};
       if(data.error)return {contract:symbol,last:ticker?num(ticker.last,0):null,state:'error',reason:'历史数据不完整：'+data.error,side:'wait',plan:null};
-      return analyse(symbol,data.frames,data.raw15,this.contracts.get(symbol),ticker,this.config,analysisTime,now,this.invalid);
+      return analyse(symbol,data.frames,data.rawSignal,this.contracts.get(symbol),ticker,this.config,analysisTime,now,this.invalid,this.mode);
     });
     const selected=selectRows(analysed,this.config);
-    return {generated_at:now,source:{state:'正常',updated:now,generated_at:now},rows:selected.map(r=>displayRow(r,now,tickers.get(r.contract))),
+    return {generated_at:now,source:{state:'正常',updated:now,generated_at:now},rows:selected.map(r=>displayRow(r,now,tickers.get(r.contract),this.mode)),
       screening:{evaluated:symbols.length,ready:analysed.filter(r=>r.state==='ready').length,watch:analysed.filter(r=>r.state==='watch').length,structure:0}};
   }
 }

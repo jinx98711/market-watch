@@ -1,7 +1,9 @@
 import {view,momentum,trend,recommendation,filterRows,snapshotURLs,combineDirect} from './model.js?v=card-trend-1';
-import {GateClient} from './gate-client.js?v=opportunity-quality-1';
+import {SCAN_FRAMES} from './gate-engine.js?v=intraday-1';
+import {GateClient} from './gate-client.js?v=intraday-1';
 import {FIELDS,defaults,loadSettings,validateSettings,applyColors,get,set} from './settings.js?v=risk-levels-3';
 const $=id=>document.getElementById(id),esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let mode='standard';
 let gate=null,ic=null,snapshot=null,source='all',dataURL='',loadingIC=false,lastMask='',error='',progress='',opened=new Set(),settings=null,base=null,client=null,generation=0,loadingGate=false;
 const time=t=>t?new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Kuala_Lumpur',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(t*1000)):'—';
 const ago=t=>t?`${Math.max(0,Math.floor(Date.now()/1000-t))}秒前`:'无数据';
@@ -10,8 +12,12 @@ const stateLabel=(r,plan)=>!r.live?'过期 / 暂停':!plan?'等待':
   plan.confirmed?'条件满足 · 请核对':'观察';
 const tone=text=>/[↑多]/.test(text)?'rise':/[↓空]/.test(text)?'fall':'neutral';
 function render(){
-  snapshot=combineDirect(gate,ic);
-  const result=view(snapshot),rows=filterRows(result.rows,source,$('search').value,$('plans-only').checked),ready=rows.filter(r=>r.state==='ready').length;
+  const intraday=mode==='intraday',frames=Object.keys(SCAN_FRAMES[mode]);
+  snapshot=combineDirect(gate,intraday?{rows:[]}:ic);
+  $('sources').hidden=intraday;
+  $('ic-health').hidden=intraday;
+  $('period-heading').textContent=frames.join(' / ');
+  const result=view(snapshot),rows=filterRows(result.rows,intraday?'Gate':source,$('search').value,$('plans-only').checked),ready=rows.filter(r=>r.state==='ready').length;
   $('ready-count').textContent=gate?ready:'—';
   const g=snapshot.screening.Gate.evaluated||0,i=snapshot.screening.IC.evaluated||0;
   $('overview-reason').textContent=progress||(!gate?'正在连接 Gate 公开行情。':result.stale?'行情已过期，旧信号已暂停。':result.ready?'列表显示预案价位，展开可查看有效期。':`Gate 筛选 ${g} 个候选 · IC 筛选 ${i} 个候选，继续等待。`);
@@ -21,7 +27,7 @@ function render(){
   $('markets').innerHTML=rows.map(r=>{
     const key=r.source+':'+r.symbol,m=momentum(r.momentum,settings?.display.grades),risk=recommendation(r),ratio=Number.isFinite(r.ratio)?r.ratio.toFixed(2)+'x':'—';
     const bias=trend(r);
-    const crosses = ['15m', '1h', '4h'].map(frame => {
+    const crosses = frames.map(frame => {
       const side = r.crosses[frame];
       if (side === 1) return `<span class="rise">${frame} 金叉</span>`;
       if (side === -1) return `<span class="fall">${frame} 死叉</span>`;
@@ -32,18 +38,18 @@ function render(){
     const netRR = r.direction && Number.isFinite(r.net_rr) ? '估算净盈亏比 ' + r.net_rr.toFixed(2) + ':1' : '';
     const referenceRR = Number.isFinite(r.reference_rr) ? '参考盈亏比 ' + r.reference_rr.toFixed(2) + ':1（费用待核实）' : '';
     const quality = [distance, netRR, referenceRR].filter(Boolean).join(' · ');
-    const periods=r.periods.map((p,index)=>`<span class="${tone(p)}"><span class="frame-label">${['15m','1h','4h'][index]}</span>${esc(p)}</span>`).join(' <span class="desktop-separator"> / </span> ');
+    const periods=r.periods.map((p,index)=>`<span class="${tone(p)}"><span class="frame-label">${frames[index]}</span>${esc(p)}</span>`).join(' <span class="desktop-separator"> / </span> ');
     return `<details class="market-row ${r.state} ${r.live?'':'stale'}" data-key="${esc(key)}" ${opened.has(key)?'open':''}>
       <summary class="row-main"><span class="identity"><strong>${esc(r.symbol)}</strong><span>${esc(r.source)} · ${r.source==='IC'?'CFD 报价':'USDT 永续'}</span><span class="trend ${bias.tone}">${bias.label}</span></span>
       <span class="price">${r.source==='Gate'?`<span class="last-price"><span class="quote-label">Last</span>${esc(r.price)}</span><span class="book-price"><span class="quote-label">Bid</span>${esc(r.bid)}</span><span class="book-price"><span class="quote-label">Ask</span>${esc(r.ask)}</span>`:esc(r.price)}</span><span class="periods">${periods}</span>
-      <span class="momentum ${m.tone||'neutral'}"><span class="momentum-heading"><strong>${esc(m.directionText||'等待')}</strong><b>${esc(m.score??'—')}<small>/100</small></b></span><span class="strength">${esc(m.levelLabel||'无评分')}</span><small>${r.source==='Gate'?'量比':'Tick 比'} ${esc(ratio)}</small></span>
+      <span class="momentum ${m.tone||'neutral'}"><span class="momentum-heading"><strong>${esc(m.directionText||'等待')}</strong><b>${esc(m.score??'—')}<small>/100</small></b></span><span class="strength">${esc(m.levelLabel||'无评分')}</span><small>${r.source==='Gate'?frames[0]+' 量比':'Tick 比'} ${esc(ratio)}</small></span>
       <span class="opportunity ${r.direction>0?'rise':r.direction<0?'fall':''}">${risk?`<b>${r.direction>0?'↑ 做多':'↓ 做空'}</b>`:''}${esc(stateLabel(r,risk))}<small>展开详情</small></span>
       ${risk ? `<span class="recommendations"><span><small>入场区间</small><strong>${esc(risk.entry.replace('~',' – '))}</strong></span><span><small>止损</small><strong>${esc(risk.stop)}</strong></span><span><small>止盈 · TP1 / TP2</small><strong>${esc(risk.take.replace('/',' / '))}</strong></span></span>` : ''}
       ${quality ? `<span class="plan-quality">${esc(quality)}</span>` : ''}
       ${crosses ? `<span class="crosses"><span>均线交叉</span>${crosses}</span>` : ''}</summary>
       <div class="row-detail"><p>${esc(r.reason)}</p>
       <p>来源更新 ${esc(time(r.updated))} · ${r.live?'有效至 '+esc(time(r.valid_until)):'等待新行情'}</p>
-      ${r.source==='IC'?'<p>Bid / Ask 为 IC 独立报价；Tick 比不是交易所成交量。</p>':'<p>成交额量比基于已收盘 15 分钟 K 线，不能单独作为入场依据。</p>'}</div></details>`;
+      ${r.source==='IC'?'<p>Bid / Ask 为 IC 独立报价；Tick 比不是交易所成交量。</p>':`<p>成交额量比基于已收盘 ${frames[0]} K 线。</p>`}</div></details>`;
   }).join('')||`<p class="empty">${!gate?'正在连接 Gate…':$('plans-only').checked?'当前筛选范围没有有效预案。':'没有匹配的品种，请更改搜索或来源。'}</p>`;
   lastMask=result.rows.map(r=>r.live?'1':'0').join('')+result.stale;clock();
 }
@@ -63,7 +69,7 @@ async function refreshGate(){
   finally{if(token===generation){loadingGate=false;progress='';$('refresh').disabled=false;$('refresh').textContent='刷新';render();}}
 }
 async function refreshIC(){
-  if(loadingIC||document.hidden)return;loadingIC=true;
+  if(loadingIC||document.hidden||mode==='intraday')return;loadingIC=true;
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),8000);
   try{
     if(!dataURL){const r=await fetch('./config.json',{cache:'no-store',signal:controller.signal});if(!r.ok)throw Error();dataURL=(await r.json()).data_base;}
@@ -79,7 +85,7 @@ function configureGate(){
   if(!gate)gate={generated_at:0,source:{state:'暂停',updated:0},rows:settings.gate.pinned.map(symbol=>({source:'Gate',symbol,price:'—',periods:['等待','等待','等待'],state:'wait',direction:0,entry:'—',stop:'—',take:'—',updated:0,valid_until:0,reason:'等待 Gate 直连分析'}))};
   if(gate)gate={...gate,source:{...gate.source,state:'暂停'},rows:gate.rows.map(row=>({...row,state:'wait',direction:0,entry:'—',stop:'—',take:'—',valid_until:0}))};
   const token=generation;
-  client=new GateClient(settings.gate,{onProgress:value=>{if(token===generation){progress=value;render();}}});
+  client=new GateClient(settings.gate,{mode,onProgress:value=>{if(token===generation){progress=value;render();}}});
   render();refreshGate();
 }
 function fillSettings(value){
@@ -101,6 +107,12 @@ $('settings-form').addEventListener('submit',event=>{
     localStorage.setItem('market-watch-settings-v1',JSON.stringify(valid));settings=valid;applyColors(settings.display);$('settings-dialog').close();
     if(rulesChanged)configureGate();else render();
   }catch(e){$('settings-error').textContent=e.message;}
+});
+$('scan-mode').addEventListener('change',event=>{
+  mode=event.target.value;
+  error='';
+  if(settings)configureGate();else render();
+  if(mode==='standard')refreshIC();
 });
 document.querySelectorAll('[data-source]').forEach(button=>button.addEventListener('click',()=>{source=button.dataset.source;document.querySelectorAll('[data-source]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));render();}));
 $('refresh').addEventListener('click',()=>{refreshGate();refreshIC();});$('search').addEventListener('input',render);$('plans-only').addEventListener('change',render);

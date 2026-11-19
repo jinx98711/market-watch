@@ -1,6 +1,7 @@
 // Read-only port of the desktop Gate rules. No accounts, positions or order endpoints.
 import {compareOpportunities} from './ranking.js?v=opportunity-quality-1';
 export const FRAMES={'15m':900,'1h':3600,'4h':14400};
+export const SCAN_FRAMES={standard:FRAMES,intraday:{'5m':300,'15m':900,'1h':3600}};
 export function num(value,fallback){
   const n=(typeof value==='number'||typeof value==='string'&&value.trim()!=='')?Number(value):NaN;
   if(!Number.isFinite(n)){if(fallback!==undefined)return fallback;throw Error('接口或配置包含无效数字');}
@@ -92,13 +93,17 @@ export function volumeSignal(bars,side,averages,a,rules={}){
 function obstacles(bars,side,entry){
   const b=bars.slice(-100),out=[];for(let i=2;i<b.length-2;i++){const near=[...b.slice(i-2,i),...b.slice(i+1,i+3)];if(side==='long'&&b[i].h>entry&&near.every(n=>b[i].h>n.h))out.push(b[i].h);if(side==='short'&&b[i].l<entry&&near.every(n=>b[i].l<n.l))out.push(b[i].l);}return out;
 }
-export function buildPlan(symbol,frames,contract,cfg,now){
-  const m=frames['15m'],h=frames['1h'],h4=frames['4h'],directions=[trend(h),trend(h4)],side=directions[0]===directions[1]?directions[0]:'wait';
-  const result={contract:symbol,state:'wait',side:'wait',plan:null,reason:'1 小时与 4 小时方向不一致'},a=atr(m),ma=ema(m.map(b=>b.c));
+export function buildPlan(symbol,frames,contract,cfg,now,mode='standard'){
+  const intervals=SCAN_FRAMES[mode];
+  const [signal,fastTrend,slowTrend]=Object.keys(intervals);
+  const m=frames[signal],h=frames[fastTrend],h4=frames[slowTrend];
+  const directions=[trend(h),trend(h4)],side=directions[0]===directions[1]?directions[0]:'wait';
+  const result={contract:symbol,state:'wait',side:'wait',plan:null,reason:`${fastTrend} 与 ${slowTrend} 方向未同向`},a=atr(m),ma=ema(m.map(b=>b.c));
   result.volume=volumeSignal(m,side,ma,a,cfg.strategy);if(side==='wait')return result;
   if(result.volume.blocked){result.reason=result.volume.status;return result;}
   const s=cfg.strategy,last=m.at(-1),prev=m.at(-2),pct=a/last.c*100;
-  if(pct<s.min_atr_15m_pct||pct>s.max_atr_15m_pct){result.reason='15 分钟波动过小或过大';return result;}
+  const minAtr=s.min_atr_15m_pct*Math.sqrt(intervals[signal]/FRAMES['15m']);
+  if(pct<minAtr||pct>s.max_atr_15m_pct){result.reason=signal+' 波动过小或过大';return result;}
   const touched=m.slice(-4,-1).some((b,i)=>b.l<=ma.at(-4+i)+.2*a&&b.h>=ma.at(-4+i)-.2*a);
   const reversal=side==='long'?last.c>last.o&&last.c>prev.h&&last.c>ma.at(-1):last.c<last.o&&last.c<prev.l&&last.c<ma.at(-1);
   const confirmed=touched&&reversal&&result.volume.confirmed&&last.h-last.l<=2.5*a,anchor=confirmed?last.c:ma.at(-1),tick=String(contract.order_price_round);
@@ -112,32 +117,33 @@ export function buildPlan(symbol,frames,contract,cfg,now){
   const fee=Math.max(s.assumed_taker_fee_rate,num(contract.taker_fee_rate,0)),cost=2*(fee+s.assumed_slippage_rate)*entry,reward=Math.abs(tp1-entry),rr=(reward-cost)/(risk+cost);
   if(rr<s.min_net_reward_risk){result.reason='扣除估计交易成本后空间不足';return result;}
   const barriers=[...obstacles(h,side,entry),...obstacles(h4,side,entry)];
-  if(barriers.length&&Math.min(...barriers.map(x=>Math.abs(x-entry)))<reward+.1*a){result.reason='附近小时级支撑或阻力压缩目标空间';return result;}
-  const end=last.t+900,expires=end+900;if(now>=expires){result.reason='旧观察计划已到期；等待新收盘数据';return result;}
-  return {...result,side,reason:confirmed?'收盘量价条件已确认，仍需核对实时价格':!result.volume.confirmed?result.volume.status:'方向一致，等待 15 分钟价格形态收盘确认',plan:{
-    id:`${symbol}:${end}:${side}:${confirmed?'confirm':'watch'}`,side,confirmed,created_at:end,expires_at:expires,entry_low:low,entry_high:high,stop,tp1,tp2,atr_15m:a,atr_15m_pct:pct,tick}};
+  if(barriers.length&&Math.min(...barriers.map(x=>Math.abs(x-entry)))<reward+.1*a){result.reason='附近支撑或阻力压缩目标空间';return result;}
+  const end=last.t+intervals[signal],expires=end+intervals[signal];if(now>=expires){result.reason='旧观察计划已到期；等待新收盘数据';return result;}
+  return {...result,side,reason:confirmed?'收盘量价条件已确认，仍需核对实时价格':!result.volume.confirmed?result.volume.status:`方向一致，等待 ${signal} 价格形态收盘确认`,plan:{
+    id:`${mode==='intraday'?'5m:':''}${symbol}:${end}:${side}:${confirmed?'confirm':'watch'}`,side,confirmed,created_at:end,expires_at:expires,entry_low:low,entry_high:high,stop,tp1,tp2,[`atr_${signal}`]:a,[`atr_${signal}_pct`]:pct,tick}};
 }
-export function evaluate(row,ticker,raw15,now,invalid,cfg){
+export function evaluate(row,ticker,rawSignal,now,invalid,cfg,mode='standard'){
   const p=row.plan;if(!p)return row;
   if(now>=p.expires_at){row.state='expired';row.reason='旧观察计划已到期；不再发出入场提醒';return row;}
-  const after=raw15.filter(b=>b.t>=p.created_at&&b.t<=now),last=positive(ticker.last),low=Math.min(last,...after.map(b=>b.l)),high=Math.max(last,...after.map(b=>b.h));
+  const after=rawSignal.filter(b=>b.t>=p.created_at&&b.t<=now),last=positive(ticker.last),low=Math.min(last,...after.map(b=>b.l)),high=Math.max(last,...after.map(b=>b.h));
   if(p.side==='long'?low<=p.stop||high>=p.tp1:high>=p.stop||low<=p.tp1)invalid.set(p.id,p.expires_at);
   if(invalid.has(p.id)){row.state='invalid';row.reason='参考止损或首个目标已被触及；本计划停用';return row;}
   if(!p.confirmed){row.state='watch';return row;}
   const entry=positive(p.side==='long'?ticker.lowest_ask:ticker.highest_bid),risk=Math.abs(entry-p.stop),fee=Math.max(cfg.strategy.assumed_taker_fee_rate,row.taker_fee_rate||0),spread=positive(ticker.lowest_ask)-positive(ticker.highest_bid),cost=2*(fee+cfg.strategy.assumed_slippage_rate)*entry+spread;
-  if(entry>=p.entry_low&&entry<=p.entry_high&&(Math.abs(p.tp1-entry)-cost)/(risk+cost)>=cfg.strategy.min_net_reward_risk){row.state='ready';row.reason='小时方向一致、15 分钟已收盘确认，报价在观察区间；请人工核对';}
+  if(entry>=p.entry_low&&entry<=p.entry_high&&(Math.abs(p.tp1-entry)-cost)/(risk+cost)>=cfg.strategy.min_net_reward_risk){row.state='ready';row.reason=`方向同向，${Object.keys(SCAN_FRAMES[mode])[0]} 已收盘确认，报价在观察区间。请核对`;}
   else{row.state='watch';row.reason='收盘条件已确认，但报价离开区间或成本过高；不追价';}return row;
 }
 function bankersRound(x){const floor=Math.floor(x);return x-floor===.5?(floor%2===0?floor:floor+1):Math.round(x);}
-export function momentumScore(frames){
-  let total=0;for(const [frame,weight] of [['15m',.5],['1h',.3],['4h',.2]]){
+export function momentumScore(frames,mode='standard'){
+  const [signal,fastTrend,slowTrend]=Object.keys(SCAN_FRAMES[mode]);
+  let total=0;for(const [frame,weight] of [[signal,.5],[fastTrend,.3],[slowTrend,.2]]){
     const bars=frames[frame],closes=bars.map(b=>b.c),a=atr(bars,true),averages=[closes[0]];
     for(const close of closes.slice(1))averages.push(averages.at(-1)+2/21*(close-averages.at(-1)));
     const displacement=a>0?(closes.at(-1)-closes.at(-7))/(a*Math.sqrt(6)):0,slope=a>0?(averages.at(-1)-averages.at(-4))/(a*.5):0,clip=x=>Math.max(-1,Math.min(1,x));
     total+=(70*clip(displacement)+30*clip(slope))*weight;
   }return bankersRound(total);
 }
-export function analyse(symbol,frames,raw15,contract,ticker,cfg,analysisTime,now=analysisTime,invalid=new Map()){
+export function analyse(symbol,frames,rawSignal,contract,ticker,cfg,analysisTime,now=analysisTime,invalid=new Map(),mode='standard'){
   const row={contract:symbol,last:ticker?num(ticker.last,0):null,state:'wait',side:'wait',plan:null};
   const q=quality(ticker,contract,cfg,now);
   try{
@@ -148,17 +154,19 @@ export function analyse(symbol,frames,raw15,contract,ticker,cfg,analysisTime,now
       row.periods[frame] = direction;
       if (cross) row.crosses[frame] = cross;
     }
-    row.momentum=momentumScore(frames);
+    row.momentum=momentumScore(frames,mode);
     if(!q.ok)return {...row,state:'blocked',reason:q.reason};
-    Object.assign(row,buildPlan(symbol,frames,contract,cfg,analysisTime));row.taker_fee_rate=Math.max(0,num(contract.taker_fee_rate,0));
-    evaluate(row,ticker,raw15,now,invalid,cfg);
+    Object.assign(row,buildPlan(symbol,frames,contract,cfg,analysisTime,mode));row.taker_fee_rate=Math.max(0,num(contract.taker_fee_rate,0));
+    evaluate(row,ticker,rawSignal,now,invalid,cfg,mode);
     if(['ready','watch'].includes(row.state)&&row.plan){
       const p=row.plan;
       if(row.state==='ready'&&!row.volume?.confirmed)return {...row,state:'wait',side:'wait',plan:null,reason:'量能未确认，暂停新入场'};
-      if(Object.values(row.periods).some(direction=>direction!==p.side))return {...row,state:'wait',side:'wait',plan:null,reason:'三周期尚未全部同向'};
+      const intervals=Object.keys(SCAN_FRAMES[mode]),[signal]=intervals;
+      const waitingOnM5=mode==='intraday'&&row.state==='watch'&&row.periods[signal]==='wait';
+      if((waitingOnM5?intervals.slice(1):intervals).some(frame=>row.periods[frame]!==p.side))return {...row,state:'wait',side:'wait',plan:null,reason:'三周期尚未全部同向'};
       const entry=positive(p.side==='long'?ticker.lowest_ask:ticker.highest_bid),sign=p.side==='long'?1:-1,risk=sign*(entry-p.stop),reward=sign*(p.tp1-entry),spread=positive(ticker.lowest_ask)-positive(ticker.highest_bid),fee=Math.max(cfg.strategy.assumed_taker_fee_rate,row.taker_fee_rate),cost=2*(fee+cfg.strategy.assumed_slippage_rate)*entry+spread,rr=(reward-cost)/(risk+cost);
       if(Math.min(risk,reward)<=0||!Number.isFinite(rr)||rr<cfg.strategy.min_net_reward_risk)return {...row,state:'wait',side:'wait',plan:null,reason:'新报价下扣除估计成本后空间不足'};
-      row.net_rr=rr;row.entry_distance_atr=Math.max(p.entry_low-entry,entry-p.entry_high,0)/p.atr_15m;
+      row.net_rr=rr;row.entry_distance_atr=Math.max(p.entry_low-entry,entry-p.entry_high,0)/p[`atr_${signal}`];
     }return row;
   }catch(e){return {...row,state:'error',side:'wait',plan:null,reason:'数据不完整，暂停信号：'+e.message};}
 }
@@ -167,10 +175,10 @@ export function selectRows(rows,cfg){
     .sort((a,b)=>compareOpportunities(a,b)||a.contract.localeCompare(b.contract)).slice(0,cfg.extra_count);
   const selected=new Set([...cfg.pinned,...extra.map(r=>r.contract)]);return rows.filter(r=>selected.has(r.contract));
 }
-export function displayRow(row,updated,ticker){
+export function displayRow(row,updated,ticker,mode='standard'){
   const active=['ready','watch'].includes(row.state)&&row.plan&&row.plan.expires_at>updated,fmt=value=>Number.isFinite(value)?String(value):'—';
   const bid=num(ticker?.highest_bid,0),ask=num(ticker?.lowest_ask,0),bookValid=bid>0&&ask>=bid;
-  return {source:'Gate',symbol:row.contract,price:fmt(row.last),bid:bookValid?fmt(bid):'—',ask:bookValid?fmt(ask):'—',periods:['15m','1h','4h'].map(frame=>({long:'↑多',short:'↓空',wait:'盘整'}[row.periods?.[frame]]||'等待')),
+  return {source:'Gate',symbol:row.contract,price:fmt(row.last),bid:bookValid?fmt(bid):'—',ask:bookValid?fmt(ask):'—',periods:Object.keys(SCAN_FRAMES[mode]).map(frame=>({long:'↑多',short:'↓空',wait:'盘整'}[row.periods?.[frame]]||'等待')),
     net_rr:active?row.net_rr??null:null,entry_distance_atr:active?row.entry_distance_atr??null:null,
     crosses:row.crosses||{},direction:active?(row.plan.side==='long'?1:-1):0,state:active?row.state:'wait',momentum:row.momentum??null,ratio:row.volume?.latest_ratio??null,
     entry:active?`${fmt(row.plan.entry_low)}~${fmt(row.plan.entry_high)}`:'—',stop:active?fmt(row.plan.stop):'—',take:active?`${fmt(row.plan.tp1)}/${fmt(row.plan.tp2)}`:'—',reason:row.reason,
